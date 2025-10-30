@@ -1,0 +1,11 @@
+streamlit
+pandas
+numpy
+plotly
+folium
+geopandas
+seaborn
+matplotlib
+pycountry
+xarray
+calendar
