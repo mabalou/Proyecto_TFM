@@ -21,28 +21,21 @@ def cargar_datos(region):
     else:
         archivo = "data/hielo/antarctic_sea_ice_extent.csv"
 
+    # Leer CSV y limpiar nombres de columnas
     df = pd.read_csv(archivo)
+    df.columns = [col.strip() for col in df.columns]  # ← elimina espacios
+    df.rename(columns={"Year": "Año", "Month": "Mes", "Extent": "Extensión"}, inplace=True)
 
-    # Renombrar columnas según idioma real del CSV
-    df = df.rename(columns={
-        "Year": "Año",
-        "Month": "Mes",
-        "Extent": "Extensión"
-    })
-
-    # Validar columnas disponibles
-    columnas_presentes = [col for col in ["Año", "Mes", "Extensión"] if col in df.columns]
-    if "Año" not in columnas_presentes or "Extensión" not in columnas_presentes:
+    # Validar columnas necesarias
+    if not {"Año", "Extensión"}.issubset(df.columns):
         raise ValueError(f"El archivo {archivo} no contiene las columnas esperadas. Columnas detectadas: {list(df.columns)}")
 
-    df = df[columnas_presentes].dropna()
-
-    # Convertir a numérico
-    for col in columnas_presentes:
-        df[col] = pd.to_numeric(df[col], errors="coerce")
+    # Convertir columnas a numéricas
+    df["Año"] = pd.to_numeric(df["Año"], errors="coerce")
+    df["Extensión"] = pd.to_numeric(df["Extensión"], errors="coerce")
 
     # Agrupar por año (promedio anual)
-    df_anual = df.groupby("Año")["Extensión"].mean().reset_index()
+    df_anual = df.groupby("Año", as_index=False)["Extensión"].mean().dropna()
 
     return df_anual
 
