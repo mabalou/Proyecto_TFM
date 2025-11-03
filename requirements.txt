@@ -21,3 +21,4 @@ Pillow
 pycountry
 xarray
 requests
+kaleido
