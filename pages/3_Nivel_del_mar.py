@@ -1,5 +1,5 @@
 # ==========================================
-# 3_Nivel_del_mar.py
+# 3_Nivel_del_mar.py — versión mejorada (UI/UX)
 # ==========================================
 import streamlit as st
 import pandas as pd
@@ -12,11 +12,21 @@ from sklearn.linear_model import LinearRegression
 # CONFIGURACIÓN DE LA PÁGINA
 # ------------------------------------------
 st.set_page_config(page_title="🌊 Nivel del mar global", layout="wide")
+
 st.title("🌊 Evolución del nivel medio global del mar")
-st.markdown("""
-Analiza la evolución mensual del nivel medio global del mar a partir de los datos de la **NOAA / NASA**.  
-Explora tendencias, variaciones por décadas y proyecciones futuras hasta el año 2100.
-""")
+
+with st.expander("📘 Acerca de esta sección", expanded=True):
+    st.markdown("""
+    Analiza la evolución mensual del **nivel medio global del mar**, con datos satelitales de la **NOAA / NASA**.
+
+    🔍 **Incluye:**
+    - Series temporales interactivas (línea, área o barras).  
+    - Cálculo de tendencias lineales y medias por década.  
+    - Proyecciones hasta el año 2100 mediante regresión lineal.  
+    - Conclusiones automáticas y descarga de resultados.
+
+    ⚙️ Usa la barra lateral para ajustar el rango de años y las opciones de visualización.
+    """)
 
 # ------------------------------------------
 # CARGA DE DATOS ROBUSTA
@@ -26,7 +36,7 @@ def cargar_datos():
     df = pd.read_csv("data/sea_level/sea_level_nasa.csv", skiprows=1, header=None, names=["Fecha", "Nivel_mar"])
     df["Fecha"] = pd.to_datetime(df["Fecha"], errors="coerce")
     df = df.dropna(subset=["Fecha", "Nivel_mar"])
-    df = df[df["Nivel_mar"].between(-100, 100)]  # eliminar valores extremos erróneos
+    df = df[df["Nivel_mar"].between(-100, 100)]  # eliminar valores extremos
     df = df[df["Nivel_mar"] != -999]  # eliminar códigos de error
     df["Año"] = df["Fecha"].dt.year
     df["Mes"] = df["Fecha"].dt.month
@@ -40,10 +50,8 @@ df = cargar_datos()
 st.sidebar.header("🔧 Personaliza la visualización")
 
 tipo_grafico = st.sidebar.selectbox("Tipo de gráfico", ["Línea", "Área", "Barras"])
-
 min_year, max_year = int(df["Año"].min()), int(df["Año"].max())
 rango = st.sidebar.slider("Selecciona el rango de años", min_year, max_year, (1993, max_year))
-
 mostrar_tendencia = st.sidebar.checkbox("📈 Mostrar línea de tendencia", value=True)
 mostrar_decadas = st.sidebar.checkbox("📊 Mostrar media por décadas", value=True)
 mostrar_prediccion = st.sidebar.checkbox("🔮 Incluir modelo predictivo", value=True)
@@ -56,35 +64,38 @@ df_filtrado = df[(df["Año"] >= rango[0]) & (df["Año"] <= rango[1])]
 # ------------------------------------------
 # VISUALIZACIÓN PRINCIPAL
 # ------------------------------------------
-titulo = "Evolución del nivel medio global del mar"
-if tipo_grafico == "Línea":
-    fig = px.line(df_filtrado, x="Fecha", y="Nivel_mar", markers=True,
-                  labels={"Nivel_mar": "Nivel del mar (mm)", "Fecha": "Fecha"},
-                  title=titulo)
-elif tipo_grafico == "Área":
-    fig = px.area(df_filtrado, x="Fecha", y="Nivel_mar",
-                  labels={"Nivel_mar": "Nivel del mar (mm)", "Fecha": "Fecha"},
-                  title=titulo)
+st.subheader("📈 Evolución temporal")
+
+if df_filtrado.empty:
+    st.info("Selecciona un rango de años válido para visualizar los datos.")
 else:
-    fig = px.bar(df_filtrado, x="Fecha", y="Nivel_mar",
-                 labels={"Nivel_mar": "Nivel del mar (mm)", "Fecha": "Fecha"},
-                 title=titulo)
+    titulo = "Evolución del nivel medio global del mar"
+    if tipo_grafico == "Línea":
+        fig = px.line(df_filtrado, x="Fecha", y="Nivel_mar", markers=True,
+                      labels={"Nivel_mar": "Nivel del mar (mm)", "Fecha": "Fecha"}, title=titulo)
+    elif tipo_grafico == "Área":
+        fig = px.area(df_filtrado, x="Fecha", y="Nivel_mar",
+                      labels={"Nivel_mar": "Nivel del mar (mm)", "Fecha": "Fecha"}, title=titulo)
+    else:
+        fig = px.bar(df_filtrado, x="Fecha", y="Nivel_mar",
+                     labels={"Nivel_mar": "Nivel del mar (mm)", "Fecha": "Fecha"}, title=titulo)
 
-# Línea de tendencia
-if mostrar_tendencia and not df_filtrado.empty:
-    x = df_filtrado["Fecha"].map(pd.Timestamp.toordinal).values.reshape(-1, 1)
-    y = df_filtrado["Nivel_mar"].values
-    modelo = LinearRegression().fit(x, y)
-    y_pred = modelo.predict(x)
-    pendiente = modelo.coef_[0] * 365.25  # mm/año
-    fig.add_scatter(x=df_filtrado["Fecha"], y=y_pred, mode="lines", name="Tendencia",
-                    line=dict(color="red", dash="dash", width=2))
+    # Línea de tendencia
+    if mostrar_tendencia:
+        x = df_filtrado["Fecha"].map(pd.Timestamp.toordinal).values.reshape(-1, 1)
+        y = df_filtrado["Nivel_mar"].values
+        modelo = LinearRegression().fit(x, y)
+        y_pred = modelo.predict(x)
+        pendiente = modelo.coef_[0] * 365.25  # mm/año
+        fig.add_scatter(x=df_filtrado["Fecha"], y=y_pred, mode="lines",
+                        name="Tendencia", line=dict(color="red", dash="dash", width=2))
 
-st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True)
 
 # ------------------------------------------
 # RESUMEN AUTOMÁTICO
 # ------------------------------------------
+st.markdown("---")
 st.subheader("🧾 Resumen automático del análisis")
 
 if not df_filtrado.empty:
@@ -93,29 +104,30 @@ if not df_filtrado.empty:
     cambio = nivel_fin - nivel_ini
     signo = "aumento" if cambio > 0 else "descenso" if cambio < 0 else "estabilidad"
 
-    st.markdown(
-        f"📅 Entre **{rango[0]}** y **{rango[1]}**, se observa un **{signo}** del nivel medio del mar "
+    st.success(
+        f"📅 Entre **{rango[0]}** y **{rango[1]}**, se observa un **{signo}** del nivel medio global "
         f"de aproximadamente **{abs(cambio):.2f} mm**.\n\n"
         f"🌊 En {rango[1]}, el nivel medio se sitúa en torno a **{nivel_fin:.2f} mm**, "
         f"frente a **{nivel_ini:.2f} mm** al inicio del periodo."
     )
 
-    if mostrar_tendencia:
+    if mostrar_tendencia and 'pendiente' in locals():
         st.markdown(f"📈 La tendencia lineal indica un **aumento medio de `{pendiente:.2f} mm/año`**.")
 else:
-    st.info("Selecciona un rango de años válido para generar el resumen.")
+    st.info("Configura un rango de años válido para generar el resumen.")
 
 # ------------------------------------------
 # ANÁLISIS POR DÉCADAS
 # ------------------------------------------
-if mostrar_decadas:
+if mostrar_decadas and not df_filtrado.empty:
+    st.markdown("---")
     st.subheader("📊 Nivel medio del mar por década")
 
     df_dec = df_filtrado.copy()
     df_dec["Década"] = (df_dec["Año"] // 10) * 10
     df_grouped = df_dec.groupby("Década")["Nivel_mar"].mean().reset_index()
 
-    st.dataframe(df_grouped.style.format({"Nivel_mar": "{:.2f}"}))
+    st.dataframe(df_grouped.style.format({"Nivel_mar": "{:.2f}"}), use_container_width=True)
 
     fig_dec = px.bar(df_grouped, x="Década", y="Nivel_mar", color="Nivel_mar",
                      color_continuous_scale="Blues",
@@ -125,12 +137,13 @@ if mostrar_decadas:
 
     decada_max = int(df_grouped.loc[df_grouped["Nivel_mar"].idxmax(), "Década"])
     valor_max = df_grouped["Nivel_mar"].max()
-    st.markdown(f"🌍 La década con mayor nivel medio del mar fue la de **{decada_max}**, con **{valor_max:.2f} mm**.")
+    st.markdown(f"🌍 La década con mayor nivel medio del mar fue **{decada_max}**, con **{valor_max:.2f} mm**.")
 
 # ------------------------------------------
 # MODELO PREDICTIVO
 # ------------------------------------------
 if mostrar_prediccion and not df.empty:
+    st.markdown("---")
     st.subheader("🔮 Proyección del nivel del mar hasta 2100")
 
     x_all = df["Fecha"].map(pd.Timestamp.toordinal).values.reshape(-1, 1)
@@ -155,9 +168,10 @@ if mostrar_prediccion and not df.empty:
         st.markdown("➖ **El modelo no muestra una variación significativa.**")
 
 # ------------------------------------------
-# CONCLUSIONES AUTOMÁTICAS CON COLOR
+# CONCLUSIONES AUTOMÁTICAS
 # ------------------------------------------
 if not df_filtrado.empty and 'coefg' in locals():
+    st.markdown("---")
     st.subheader("🧩 Conclusiones automáticas")
 
     tendencia = "ascendente" if coefg > 0 else "descendente" if coefg < 0 else "estable"
@@ -168,52 +182,46 @@ if not df_filtrado.empty and 'coefg' in locals():
     )
 
     color_fondo = "#ffcccc" if coefg > 0 else "#ccffcc" if coefg < 0 else "#e6e6e6"
-    color_texto = "#222"
-
     st.markdown(
         f"""
-        <div style="background-color:{color_fondo}; color:{color_texto}; padding:15px; border-radius:12px; border:1px solid #bbb;">
+        <div style="background-color:{color_fondo}; color:#222; padding:15px; border-radius:12px; border:1px solid #bbb;">
             <h4>📋 <b>Conclusión Final del Análisis ({rango[0]}–{rango[1]})</b></h4>
             <ul>
                 <li>La tendencia global es <b>{tendencia}</b>, con una pendiente media de <b>{coefg:.2f} mm/año</b>.</li>
-                <li>El nivel medio del mar ha mostrado un cambio neto de <b>{cambio:.2f} mm</b> durante el periodo analizado.</li>
+                <li>El cambio neto durante el periodo es de <b>{cambio:.2f} mm</b>.</li>
             </ul>
             <p>{frase_tend}</p>
-            <p style="font-size:0.9em; color:#444;">🔮 Estas conclusiones se actualizan automáticamente al modificar el rango temporal.</p>
+            <p style="font-size:0.9em;">🔮 Las conclusiones se actualizan automáticamente según el rango seleccionado.</p>
         </div>
         """,
         unsafe_allow_html=True
     )
 
 # ------------------------------------------
-# DESCARGAS SEGURAS (evita fallo de Kaleido)
+# DESCARGAS SEGURAS
 # ------------------------------------------
+st.markdown("---")
 st.subheader("💾 Exportar datos y gráficos")
 
 col1, col2 = st.columns(2)
 
-# 📄 Descarga de CSV
 with col1:
     try:
         csv = df_filtrado.to_csv(index=False).encode("utf-8")
         st.download_button("📄 Descargar CSV", data=csv,
-                           file_name="datos_filtrados.csv", mime="text/csv")
+                           file_name="nivel_mar_filtrado.csv", mime="text/csv")
     except Exception as e:
         st.error(f"No se pudo generar el CSV: {e}")
 
-# 🖼️ Descarga de imagen o alternativa
 with col2:
     try:
-        from io import BytesIO
         import plotly.io as pio
         buffer = BytesIO()
         fig.write_image(buffer, format="png")
         st.download_button("🖼️ Descargar gráfico (PNG)", data=buffer,
-                           file_name="grafico.png", mime="image/png")
-    except Exception as e:
-        st.warning("⚠️ No se pudo generar la imagen en Streamlit Cloud. "
-                   "Descarga el gráfico interactivo o los datos.")
-        # alternativa: HTML interactivo
+                           file_name="grafico_nivel_mar.png", mime="image/png")
+    except Exception:
+        st.warning("⚠️ Kaleido no disponible — descarga HTML interactivo.")
         html_bytes = fig.to_html().encode("utf-8")
         st.download_button("🌐 Descargar gráfico (HTML interactivo)",
                            data=html_bytes, file_name="grafico_interactivo.html", mime="text/html")

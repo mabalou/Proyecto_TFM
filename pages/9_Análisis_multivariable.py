@@ -9,9 +9,26 @@ from sklearn.linear_model import LinearRegression
 
 st.set_page_config(page_title="🔗 Análisis multivariable", layout="wide")
 st.title("🔗 Análisis multivariable: clima ↔ sociedad")
-st.markdown("""
-Analiza **tendencias, correlaciones y predicciones** multivariables para entender el impacto humano en el cambio climático.
-""")
+
+# -------------------------------------------------
+# CONFIGURACIÓN DE PÁGINA
+# -------------------------------------------------
+st.set_page_config(page_title="🔗 Análisis multivariable", layout="wide")
+st.title("🔗 Análisis multivariable: clima ↔ sociedad")
+
+with st.expander("ℹ️ **Descripción del análisis**", expanded=True):
+    st.markdown("""
+    En esta sección se realiza un **análisis multivariable interactivo** que combina datos
+    de **clima global** (temperatura, gases de efecto invernadero, nivel del mar, energía)
+    y de **indicadores socioeconómicos** (PIB, población, emisiones por país).
+
+    Puedes explorar:
+    - 🌐 **Variables globales combinadas:** relaciones entre indicadores ambientales globales.
+    - 🗺️ **Indicadores por país:** evolución de PIB, población y emisiones de CO₂ por región.
+
+    El objetivo es descubrir **correlaciones, tendencias y patrones** que vinculan la actividad humana
+    con los cambios observados en el sistema climático.
+    """)
 
 # -------------------------------------------------
 # UTILIDADES

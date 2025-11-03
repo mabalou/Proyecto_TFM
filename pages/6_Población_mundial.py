@@ -1,5 +1,5 @@
 # ==========================================
-# 6_Población_mundial.py — Versión avanzada
+# 6_Población_mundial.py — Versión avanzada final
 # ==========================================
 import streamlit as st
 import pandas as pd
@@ -13,10 +13,12 @@ from sklearn.linear_model import LinearRegression
 # ------------------------------------------
 st.set_page_config(page_title="🌍 Población Mundial", layout="wide")
 st.title("🌍 Evolución de la población mundial")
-st.markdown("""
-Analiza la evolución de la población por país o región a lo largo del tiempo.  
-Explora tendencias, medias por década y proyecciones hasta el año 2100.
-""")
+
+with st.expander("📘 Acerca de esta sección", expanded=True):
+    st.markdown("""
+    Explora la evolución de la **población mundial** desde 1960 hasta la actualidad.  
+    Analiza países o regiones, **tendencias por década**, comparativas y **proyecciones demográficas hasta 2100**.
+    """)
 
 # ------------------------------------------
 # CARGA DE DATOS
@@ -45,7 +47,11 @@ df = cargar_datos()
 st.sidebar.header("🔧 Personaliza la visualización")
 
 paises = sorted(df["País"].unique().tolist())
-paises_seleccionados = st.sidebar.multiselect("Selecciona países o regiones", paises, default=["Spain", "United States"])
+paises_seleccionados = st.sidebar.multiselect(
+    "Selecciona países o regiones",
+    paises,
+    default=["Spain", "United States"]
+)
 
 min_year, max_year = int(df["Año"].min()), int(df["Año"].max())
 rango = st.sidebar.slider("Selecciona el rango de años", min_year, max_year, (1980, max_year))
@@ -97,6 +103,7 @@ if mostrar_tendencia or mostrar_prediccion:
                                 line=dict(dash="dash", width=2))
 
 st.plotly_chart(fig, use_container_width=True)
+st.markdown("---")
 
 # ------------------------------------------
 # RESUMEN AUTOMÁTICO
@@ -115,6 +122,8 @@ if not df_filtrado.empty:
 else:
     st.info("Selecciona un rango y país válidos para generar conclusiones.")
 
+st.markdown("---")
+
 # ------------------------------------------
 # ANÁLISIS POR DÉCADAS
 # ------------------------------------------
@@ -131,6 +140,8 @@ if mostrar_decadas:
     if usar_escala_log:
         fig_dec.update_yaxes(type="log", title="Población media (escala logarítmica)")
     st.plotly_chart(fig_dec, use_container_width=True)
+
+st.markdown("---")
 
 # ------------------------------------------
 # PREDICCIÓN HASTA 2100
@@ -153,34 +164,29 @@ if mostrar_prediccion:
         fig_pred.update_yaxes(type="log")
     st.plotly_chart(fig_pred, use_container_width=True)
 
+st.markdown("---")
+
 # ------------------------------------------
-# 🧩 CONCLUSIONES AUTOMÁTICAS CON COLOR (ESTILO UNIFICADO)
+# 🧩 CONCLUSIONES AUTOMÁTICAS CON COLOR
 # ------------------------------------------
 st.subheader("🧩 Conclusiones automáticas")
 
 if not df_filtrado.empty and tendencias:
-    # Caso 1: un solo país seleccionado
+    # Caso 1: un solo país
     if len(paises_seleccionados) == 1:
         pais = paises_seleccionados[0]
         coef_val = list(tendencias.values())[0]
-        tendencia = (
-            "ascendente" if coef_val > 0
-            else "descendente" if coef_val < 0
-            else "estable"
-        )
+        tendencia = "ascendente" if coef_val > 0 else "descendente" if coef_val < 0 else "estable"
 
-        # Colores coherentes con el resto del dashboard
         color_fondo = "#ffcccc" if coef_val > 0 else "#ccffcc" if coef_val < 0 else "#e6e6e6"
         color_texto = "#222"
 
-        # Década más poblada
         df_decada = df_filtrado.copy()
         df_decada["Década"] = (df_decada["Año"] // 10) * 10
         medias_decadas = df_decada.groupby("Década")["Población"].mean()
         decada_max = medias_decadas.idxmax()
         valor_max = medias_decadas.max()
 
-        # Frase contextual
         frase_tend = (
             "📈 **Aumento sostenido de la población.**" if coef_val > 0 else
             "📉 **Reducción o estancamiento demográfico.**" if coef_val < 0 else
@@ -193,9 +199,9 @@ if not df_filtrado.empty and tendencias:
                         padding:15px; border-radius:12px; border:1px solid #bbb;">
                 <h4>📋 <b>Conclusión Final del Análisis ({rango[0]}–{rango[1]})</b></h4>
                 <ul>
-                    <li>La tendencia poblacional de <b>{pais}</b> es <b>{tendencia}</b> en el periodo analizado.</li>
+                    <li>La tendencia poblacional de <b>{pais}</b> es <b>{tendencia}</b>.</li>
                     <li>El cambio medio anual estimado es de <b>{coef_val:,.0f} habitantes</b>.</li>
-                    <li>La década más poblada fue la de <b>{int(decada_max)}</b>, con una media de <b>{valor_max:,.0f} habitantes</b>.</li>
+                    <li>La década más poblada fue la de <b>{int(decada_max)}</b> con una media de <b>{valor_max:,.0f} habitantes</b>.</li>
                 </ul>
                 <p>{frase_tend}</p>
                 <p style="font-size:0.9em; color:#444;">
@@ -206,7 +212,7 @@ if not df_filtrado.empty and tendencias:
             unsafe_allow_html=True
         )
 
-    # Caso 2: varios países seleccionados
+    # Caso 2: varios países
     elif len(paises_seleccionados) > 1:
         df_tend = pd.DataFrame(list(tendencias.items()), columns=["País", "Crecimiento medio (hab/año)"])
         df_tend = df_tend.sort_values("Crecimiento medio (hab/año)", ascending=False)
@@ -214,7 +220,6 @@ if not df_filtrado.empty and tendencias:
         pais_top = df_tend.iloc[0]["País"]
         valor_top = df_tend.iloc[0]["Crecimiento medio (hab/año)"]
         tendencia_general = "ascendente" if valor_top > 0 else "descendente" if valor_top < 0 else "estable"
-
         color_fondo = "#ffcccc" if valor_top > 0 else "#ccffcc" if valor_top < 0 else "#e6e6e6"
 
         st.markdown(
@@ -225,9 +230,9 @@ if not df_filtrado.empty and tendencias:
                 <ul>
                     <li>El país con mayor crecimiento poblacional medio es <b>{pais_top}</b>,
                         con un incremento de <b>{valor_top:,.0f} hab/año</b>.</li>
-                    <li>La tendencia global es <b>{tendencia_general}</b> en el periodo analizado.</li>
+                    <li>La tendencia global es <b>{tendencia_general}</b>.</li>
                 </ul>
-                <p>💡 Estos resultados reflejan la evolución demográfica desigual entre las regiones seleccionadas.</p>
+                <p>💡 Estos resultados reflejan la evolución demográfica desigual entre regiones.</p>
                 <p style="font-size:0.9em; color:#444;">
                     🔮 Las conclusiones se actualizan automáticamente al cambiar países o años.
                 </p>
@@ -242,6 +247,8 @@ if not df_filtrado.empty and tendencias:
 else:
     st.info("Selecciona uno o más países con datos válidos para generar conclusiones.")
 
+st.markdown("---")
+
 # ------------------------------------------
 # DESCARGAS SEGURAS (evita fallo de Kaleido)
 # ------------------------------------------
@@ -249,29 +256,22 @@ st.subheader("💾 Exportar datos y gráficos")
 
 col1, col2 = st.columns(2)
 
-# 📄 Descarga de CSV
 with col1:
     try:
         csv = df_filtrado.to_csv(index=False).encode("utf-8")
-        st.download_button("📄 Descargar CSV", data=csv,
-                           file_name="datos_filtrados.csv", mime="text/csv")
+        st.download_button("📄 Descargar CSV", data=csv, file_name="datos_poblacion.csv", mime="text/csv")
     except Exception as e:
         st.error(f"No se pudo generar el CSV: {e}")
 
-# 🖼️ Descarga de imagen o alternativa
 with col2:
     try:
         from io import BytesIO
         import plotly.io as pio
         buffer = BytesIO()
         fig.write_image(buffer, format="png")
-        st.download_button("🖼️ Descargar gráfico (PNG)", data=buffer,
-                           file_name="grafico.png", mime="image/png")
-    except Exception as e:
-        st.warning("⚠️ No se pudo generar la imagen en Streamlit Cloud. "
-                   "Descarga el gráfico interactivo o los datos.")
-        # alternativa: HTML interactivo
+        st.download_button("🖼️ Descargar gráfico (PNG)", data=buffer, file_name="grafico_poblacion.png", mime="image/png")
+    except Exception:
+        st.warning("⚠️ No se pudo generar la imagen. Descarga el gráfico interactivo o los datos.")
         html_bytes = fig.to_html().encode("utf-8")
-        st.download_button("🌐 Descargar gráfico (HTML interactivo)",
-                           data=html_bytes, file_name="grafico_interactivo.html", mime="text/html")
-
+        st.download_button("🌐 Descargar gráfico (HTML interactivo)", data=html_bytes,
+                           file_name="grafico_poblacion_interactivo.html", mime="text/html")

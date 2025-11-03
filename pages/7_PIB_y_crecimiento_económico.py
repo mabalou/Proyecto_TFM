@@ -1,5 +1,5 @@
 # ==========================================
-# 7_PIB_y_crecimiento_económico.py
+# 7_PIB_y_crecimiento_económico.py — Versión avanzada
 # ==========================================
 import streamlit as st
 import pandas as pd
@@ -13,10 +13,17 @@ from sklearn.linear_model import LinearRegression
 # ------------------------------------------
 st.set_page_config(page_title="💰 PIB y Crecimiento Económico", layout="wide")
 st.title("💰 Evolución del PIB por país")
-st.markdown("""
-Analiza la evolución del Producto Interior Bruto (PIB) de diferentes países a lo largo del tiempo.  
-Explora tendencias de crecimiento económico, medias por década y proyecciones hasta el año 2100.
-""")
+
+# ------------------------------------------
+# BLOQUE INFORMATIVO
+# ------------------------------------------
+with st.expander("📘 Acerca de esta sección"):
+    st.markdown("""
+    - **Fuente de datos:** Banco Mundial – World Development Indicators.  
+    - **Unidad:** Dólares estadounidenses (USD) corrientes.  
+    - **Objetivo:** Analiza la evolución del Producto Interior Bruto (PIB) de diferentes países a lo largo del tiempo.  
+Explora **tendencias de crecimiento económico**, medias por década y **proyecciones hasta 2100**  
+    """)
 
 # ------------------------------------------
 # CARGA DE DATOS
@@ -38,7 +45,7 @@ def cargar_datos():
 df = cargar_datos()
 
 # ------------------------------------------
-# SIDEBAR
+# SIDEBAR DE CONTROL
 # ------------------------------------------
 st.sidebar.header("🔧 Personaliza la visualización")
 
@@ -144,7 +151,7 @@ if mostrar_prediccion:
             x = df_pais["Año"].values.reshape(-1, 1)
             y = df_pais["PIB"].values
             modelo = LinearRegression().fit(x, y)
-            x_pred = np.arange(x.max()+1, 2101).reshape(-1, 1)
+            x_pred = np.arange(x.max() + 1, 2101).reshape(-1, 1)
             y_pred = modelo.predict(x_pred)
             fig_pred.add_scatter(x=x_pred.flatten(), y=y_pred, mode="lines", name=pais)
     if usar_escala_log:
@@ -152,65 +159,52 @@ if mostrar_prediccion:
     st.plotly_chart(fig_pred, use_container_width=True)
 
 # ------------------------------------------
-# 🧩 CONCLUSIONES AUTOMÁTICAS CON COLOR (ESTILO UNIFICADO)
+# 🧩 CONCLUSIONES AUTOMÁTICAS CON COLOR
 # ------------------------------------------
 st.subheader("🧩 Conclusiones automáticas")
 
 if not df_filtrado.empty and tendencias:
-    # Caso 1: un solo país seleccionado
     if len(paises_seleccionados) == 1:
         pais = paises_seleccionados[0]
         coef_val = list(tendencias.values())[0]
-        tendencia = (
-            "ascendente" if coef_val > 0
-            else "descendente" if coef_val < 0
-            else "estable"
-        )
+        tendencia = "ascendente" if coef_val > 0 else "descendente" if coef_val < 0 else "estable"
 
-        # Colores coherentes con las otras páginas
         color_fondo = "#ffcccc" if coef_val > 0 else "#ccffcc" if coef_val < 0 else "#e6e6e6"
         color_texto = "#222"
 
-        # Cálculo adicional: década más activa
         df_decada = df_filtrado.copy()
         df_decada["Década"] = (df_decada["Año"] // 10) * 10
         medias_decadas = df_decada.groupby("Década")["PIB"].mean()
         decada_max = medias_decadas.idxmax()
         valor_max = medias_decadas.max()
 
-        # Frase contextual
         frase_tend = (
             "📈 **Aumento sostenido del PIB.**" if coef_val > 0 else
-            "📉 **Disminución o ralentización del crecimiento económico.**" if coef_val < 0 else
-            "➖ **Estabilidad en el crecimiento económico.**"
+            "📉 **Ralentización o contracción económica.**" if coef_val < 0 else
+            "➖ **Estabilidad económica.**"
         )
 
         st.markdown(
             f"""
             <div style="background-color:{color_fondo}; color:{color_texto};
                         padding:15px; border-radius:12px; border:1px solid #bbb;">
-                <h4>📋 <b>Conclusión Final del Análisis ({rango[0]}–{rango[1]})</b></h4>
+                <h4>📋 <b>Conclusión Final ({rango[0]}–{rango[1]})</b></h4>
                 <ul>
-                    <li>La tendencia del PIB de <b>{pais}</b> es <b>{tendencia}</b> en el periodo analizado.</li>
+                    <li>La tendencia del PIB de <b>{pais}</b> es <b>{tendencia}</b>.</li>
                     <li>El cambio medio anual estimado es de <b>${coef_val:,.0f}</b>.</li>
                     <li>La década más próspera fue la de <b>{int(decada_max)}</b>, con una media de <b>${valor_max:,.0f}</b>.</li>
                 </ul>
                 <p>{frase_tend}</p>
-                <p style="font-size:0.9em; color:#444;">
-                    🔮 Estas conclusiones se actualizan automáticamente al modificar el rango o el país seleccionado.
-                </p>
+                <p style="font-size:0.9em; color:#444;">🔮 Estas conclusiones se actualizan automáticamente al modificar el rango o el país.</p>
             </div>
             """,
             unsafe_allow_html=True
         )
 
-    # Caso 2: varios países seleccionados
-    elif len(paises_seleccionados) > 1:
-        # Tabla de resumen
+    else:
         df_tend = pd.DataFrame(list(tendencias.items()), columns=["País", "Crecimiento medio (USD/año)"])
         df_tend = df_tend.sort_values("Crecimiento medio (USD/año)", ascending=False)
 
-        # Determinar país con mayor crecimiento
         pais_top = df_tend.iloc[0]["País"]
         valor_top = df_tend.iloc[0]["Crecimiento medio (USD/año)"]
         tendencia_general = "ascendente" if valor_top > 0 else "descendente" if valor_top < 0 else "estable"
@@ -221,56 +215,46 @@ if not df_filtrado.empty and tendencias:
             f"""
             <div style="background-color:{color_fondo}; color:#222;
                         padding:15px; border-radius:12px; border:1px solid #bbb;">
-                <h4>📋 <b>Conclusión General del Análisis ({rango[0]}–{rango[1]})</b></h4>
+                <h4>📋 <b>Conclusión General ({rango[0]}–{rango[1]})</b></h4>
                 <ul>
-                    <li>El país con mayor crecimiento medio del PIB es <b>{pais_top}</b>, 
-                        con un incremento de <b>${valor_top:,.0f} USD/año</b>.</li>
-                    <li>La tendencia global es <b>{tendencia_general}</b> en el periodo analizado.</li>
+                    <li>El país con mayor crecimiento medio es <b>{pais_top}</b> (+${valor_top:,.0f}/año).</li>
+                    <li>La tendencia global es <b>{tendencia_general}</b>.</li>
                 </ul>
-                <p>💡 Estos resultados reflejan la disparidad del crecimiento económico entre las regiones seleccionadas.</p>
-                <p style="font-size:0.9em; color:#444;">
-                    🔮 Las conclusiones se actualizan automáticamente al cambiar países o años.
-                </p>
+                <p>💡 Refleja la disparidad de crecimiento entre las economías seleccionadas.</p>
+                <p style="font-size:0.9em; color:#444;">🔮 Las conclusiones se actualizan al cambiar países o años.</p>
             </div>
             """,
             unsafe_allow_html=True
         )
 
-        st.markdown("📈 **Ranking de tendencias por país:**")
+        st.markdown("📈 **Ranking de crecimiento por país:**")
         st.dataframe(df_tend.style.format({"Crecimiento medio (USD/año)": "{:,.0f}"}))
 
 else:
     st.info("Selecciona uno o más países con datos válidos para generar conclusiones.")
 
 # ------------------------------------------
-# DESCARGAS SEGURAS (evita fallo de Kaleido)
+# DESCARGAS SEGURAS (Evita fallo de Kaleido)
 # ------------------------------------------
 st.subheader("💾 Exportar datos y gráficos")
-
 col1, col2 = st.columns(2)
 
-# 📄 Descarga de CSV
 with col1:
     try:
         csv = df_filtrado.to_csv(index=False).encode("utf-8")
-        st.download_button("📄 Descargar CSV", data=csv,
-                           file_name="datos_filtrados.csv", mime="text/csv")
+        st.download_button("📄 Descargar CSV", data=csv, file_name="datos_pib.csv", mime="text/csv")
     except Exception as e:
         st.error(f"No se pudo generar el CSV: {e}")
 
-# 🖼️ Descarga de imagen o alternativa
 with col2:
     try:
         from io import BytesIO
         import plotly.io as pio
         buffer = BytesIO()
         fig.write_image(buffer, format="png")
-        st.download_button("🖼️ Descargar gráfico (PNG)", data=buffer,
-                           file_name="grafico.png", mime="image/png")
-    except Exception as e:
-        st.warning("⚠️ No se pudo generar la imagen en Streamlit Cloud. "
-                   "Descarga el gráfico interactivo o los datos.")
-        # alternativa: HTML interactivo
+        st.download_button("🖼️ Descargar gráfico (PNG)", data=buffer, file_name="grafico_pib.png", mime="image/png")
+    except Exception:
+        st.warning("⚠️ No se pudo generar la imagen (limitación de Streamlit Cloud).")
         html_bytes = fig.to_html().encode("utf-8")
-        st.download_button("🌐 Descargar gráfico (HTML interactivo)",
-                           data=html_bytes, file_name="grafico_interactivo.html", mime="text/html")
+        st.download_button("🌐 Descargar gráfico interactivo (HTML)", data=html_bytes,
+                           file_name="grafico_pib_interactivo.html", mime="text/html")
