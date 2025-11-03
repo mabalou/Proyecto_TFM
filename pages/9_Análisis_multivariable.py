@@ -484,21 +484,30 @@ with tab2:
     else:
         st.info("Configura países/métricas para visualizar resultados.")
 
-# ------------------------------------------
-# DESCARGAS SEGURAS (auto-detector de DataFrame)
-# ------------------------------------------
+# =================================================
+# DESCARGAS SEGURAS Y EXPORTACIÓN
+# =================================================
 st.subheader("💾 Exportar datos y gráficos")
 
 col1, col2 = st.columns(2)
 
-# Detecta automáticamente el DataFrame usado en la página
+# 1️⃣ Detecta el DataFrame activo según el tab
 df_export = None
-for var_name in ["df_f", "df_filtrado", "df", "df_fuentes", "df_resultado", "df_final"]:
-    if var_name in locals():
-        df_export = locals()[var_name]
-        break
+if "dfg" in locals() and not dfg.empty:
+    df_export = dfg.copy()          # global
+elif "panel" in locals() and not panel.empty:
+    df_export = panel.copy()        # por país
 
-# 📄 Descarga de CSV
+# 2️⃣ Detecta el gráfico actual (si existe)
+fig_export = None
+if "fig" in locals():
+    fig_export = fig
+elif "fig_pred" in locals():
+    fig_export = fig_pred
+elif "fig_dec" in locals():
+    fig_export = fig_dec
+
+# 📄 Descarga CSV
 with col1:
     if df_export is not None and not df_export.empty:
         try:
@@ -506,7 +515,7 @@ with col1:
             st.download_button(
                 "📄 Descargar CSV",
                 data=csv,
-                file_name="consumo_energetico_filtrado.csv",
+                file_name="analisis_multivariable_datos.csv",
                 mime="text/csv"
             )
         except Exception as e:
@@ -514,25 +523,28 @@ with col1:
     else:
         st.info("⚠️ No hay datos disponibles para exportar.")
 
-# 🖼️ Descarga de imagen (con fallback a HTML interactivo)
+# 🖼️ Descarga de gráfico (PNG o HTML)
 with col2:
-    try:
-        import plotly.io as pio
-        from io import BytesIO
-        buffer = BytesIO()
-        fig.write_image(buffer, format="png")
-        st.download_button(
-            "🖼️ Descargar gráfico (PNG)",
-            data=buffer,
-            file_name="grafico_consumo_energetico.png",
-            mime="image/png"
-        )
-    except Exception:
-        st.warning("⚠️ No se pudo generar la imagen (Kaleido no disponible en Streamlit Cloud).")
-        html_bytes = fig.to_html().encode("utf-8")
-        st.download_button(
-            "🌐 Descargar gráfico (HTML interactivo)",
-            data=html_bytes,
-            file_name="grafico_interactivo.html",
-            mime="text/html"
-        )
+    if fig_export is not None:
+        try:
+            from io import BytesIO
+            import plotly.io as pio
+            buffer = BytesIO()
+            fig_export.write_image(buffer, format="png")
+            st.download_button(
+                "🖼️ Descargar gráfico (PNG)",
+                data=buffer,
+                file_name="grafico_multivariable.png",
+                mime="image/png"
+            )
+        except Exception:
+            st.warning("⚠️ Kaleido no está disponible en Streamlit Cloud — exporta HTML interactivo en su lugar.")
+            html_bytes = fig_export.to_html().encode("utf-8")
+            st.download_button(
+                "🌐 Descargar gráfico (HTML interactivo)",
+                data=html_bytes,
+                file_name="grafico_multivariable.html",
+                mime="text/html"
+            )
+    else:
+        st.info("⚠️ No hay gráfico disponible para exportar todavía.")
