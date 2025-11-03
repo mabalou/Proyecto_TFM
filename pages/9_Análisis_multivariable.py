@@ -76,64 +76,47 @@ def _ensure_year_column(df, prefer="Año"):
 def load_global_sources():
     dfs = []
 
-    # 1) Temperatura global (distintos formatos)
+    # === 1) Temperatura global (formato NASA mensual) ===
     try:
         t = _safe_read_csv("data/temperatura/global_temperature_nasa.csv")
         if not t.empty:
             t.columns = t.columns.str.strip()
-            # Caso típico NASA con 'Year' y columnas mensuales / J-D
-            if "Year" in t.columns or "year" in t.columns:
-                t = _ensure_year_column(t)
-                # Tomamos media de todas las columnas numéricas excepto Año
+            if "Year" in t.columns and any(c in t.columns for c in ["Jan", "Feb", "Mar"]):
+                # promedio de las 12 columnas mensuales
+                t["Temp_anom_C"] = pd.to_numeric(
+                    t[[c for c in t.columns if c not in ["Year"]]], errors="coerce"
+                ).mean(axis=1)
+                t = t.rename(columns={"Year": "Año"})[["Año", "Temp_anom_C"]].dropna()
+            elif "year" in t.columns:
+                t = t.rename(columns={"year": "Año"})
                 num_cols = [c for c in t.columns if c != "Año"]
                 t["Temp_anom_C"] = pd.to_numeric(t[num_cols], errors="coerce").mean(axis=1)
                 t = t[["Año", "Temp_anom_C"]].dropna()
             else:
-                # Otra variante (p.ej. ya agregada anual)
-                # Intentamos detectar una columna numérica principal
-                num_cols = [c for c in t.columns if c.lower() not in {"año", "year"}]
-                t = _ensure_year_column(t)
-                if "Año" in t.columns and num_cols:
-                    cand = pd.to_numeric(t[num_cols], errors="coerce")
-                    t["Temp_anom_C"] = cand.mean(axis=1)
-                    t = t[["Año", "Temp_anom_C"]].dropna()
-                else:
-                    t = pd.DataFrame(columns=["Año", "Temp_anom_C"])
+                t = pd.DataFrame(columns=["Año", "Temp_anom_C"])
+
+            # opcional: suavizado de 5 años
+            t["Temp_anom_C"] = t["Temp_anom_C"].rolling(window=5, center=True, min_periods=1).mean()
         else:
             t = pd.DataFrame(columns=["Año", "Temp_anom_C"])
-        if t.empty:
-            st.warning("⚠️ No se detectó columna 'Año' en temperatura. Revisar CSV.")
+
         dfs.append(t)
     except Exception as e:
         st.warning(f"⚠️ Temperatura: {e}")
         dfs.append(pd.DataFrame(columns=["Año", "Temp_anom_C"]))
 
-    # 2) GEI (NOAA-like). Buscamos fila de cabecera y leemos desde ahí.
+    # === 2) Gases de efecto invernadero ===
     def _load_gas(path, out_col):
         try:
-            with open(path, "r", encoding="utf-8") as f:
-                lines = f.readlines()
-            start = 0
-            for i, ln in enumerate(lines):
-                low = ln.replace("\t", ",").lower()
-                if "year" in low and ("average" in low or "trend" in low or "decimal" in low):
-                    start = i
-                    break
-            df = _safe_read_csv(path, skiprows=start)
-            df.columns = [c.strip().lower() for c in df.columns]
-            if "year" not in df.columns:
-                # plan B: usar engine python con separadores raros
-                df = _safe_read_csv(path, skiprows=start, engine="python")
-                df.columns = [c.strip().lower() for c in df.columns]
-            # preferimos 'average', si no 'trend'
-            val_col = "average" if "average" in df.columns else ("trend" if "trend" in df.columns else None)
-            if val_col is None:
-                return pd.DataFrame(columns=["Año", out_col])
-            df = df[["year", val_col]].dropna()
-            df["year"] = pd.to_numeric(df["year"], errors="coerce").astype("Int64")
-            df[val_col] = pd.to_numeric(df[val_col], errors="coerce")
-            df = df.rename(columns={"year": "Año", val_col: out_col})
-            return df.dropna()
+            df = _safe_read_csv(path, comment="#")
+            df.columns = df.columns.str.strip().str.lower()
+            if "year" in df.columns:
+                val_col = "average" if "average" in df.columns else ("trend" if "trend" in df.columns else None)
+                if val_col:
+                    df = df.rename(columns={"year": "Año", val_col: out_col})
+                    df[out_col] = pd.to_numeric(df[out_col], errors="coerce")
+                    return df[["Año", out_col]].dropna()
+            return pd.DataFrame(columns=["Año", out_col])
         except Exception as e:
             st.warning(f"⚠️ Error cargando {path}: {e}")
             return pd.DataFrame(columns=["Año", out_col])
@@ -143,87 +126,42 @@ def load_global_sources():
     n2o = _load_gas("data/gases/greenhouse_gas_n2o_global.csv", "N2O_ppb")
     dfs += [co2, ch4, n2o]
 
-    # 3) Nivel del mar (NOAA mensual → anual)
+    # === 3) Nivel del mar ===
     try:
-        sl = _safe_read_csv(
-            "data/sea_level/sea_level_nasa.csv",
-            skiprows=1, header=None, names=["Fecha", "Nivel_mm"]
-        )
+        sl = _safe_read_csv("data/sea_level/sea_level_nasa.csv", skiprows=1, header=None, names=["Fecha", "Nivel_mm"])
         if not sl.empty:
-            sl = sl[sl["Nivel_mm"].between(-3000, 3000)]
             sl["Fecha"] = pd.to_datetime(sl["Fecha"], errors="coerce")
             sl["Año"] = sl["Fecha"].dt.year
             sl = sl.groupby("Año", as_index=False)["Nivel_mm"].mean()
             sl = sl.rename(columns={"Nivel_mm": "SeaLevel_mm"})
-        dfs.append(sl[["Año", "SeaLevel_mm"]] if "Año" in sl.columns else pd.DataFrame(columns=["Año", "SeaLevel_mm"]))
+        dfs.append(sl)
     except Exception as e:
         st.warning(f"⚠️ Nivel del mar: {e}")
         dfs.append(pd.DataFrame(columns=["Año", "SeaLevel_mm"]))
 
-    # 4) Hielo marino (anual)
-    def _load_ice(path, out_col):
-        try:
-            d = _safe_read_csv(path)
-            d.columns = d.columns.str.strip()
-            if {"Year", "Month", "Extent"}.issubset(d.columns) or {"year", "month", "extent"}.issubset([c.lower() for c in d.columns]):
-                d = _ensure_year_column(d)
-                d = d.rename(columns={"Extent": out_col, "extent": out_col})
-                d = d.groupby("Año", as_index=False)[out_col].mean()
-                return d[["Año", out_col]]
-            else:
-                # si ya viene anual (Año, Extensión)
-                d = _ensure_year_column(d)
-                if "Año" in d.columns:
-                    # intentamos detectar la col de extensión
-                    candidates = [c for c in d.columns if c.lower() not in {"año", "year"}]
-                    if candidates:
-                        val = candidates[0]
-                        return d.rename(columns={val: out_col})[["Año", out_col]]
-            return pd.DataFrame(columns=["Año", out_col])
-        except Exception:
-            return pd.DataFrame(columns=["Año", out_col])
-
-    ice_ar = _load_ice("data/hielo/arctic_sea_ice_extent.csv", "Arctic_ice_Mkm2")
-    ice_an = _load_ice("data/hielo/antarctic_sea_ice_extent.csv", "Antarctic_ice_Mkm2")
-    dfs += [ice_ar, ice_an]
-
-    # 5) Energía mundial agregada por año
+    # === 4) Energía global ===
     try:
         ene = _safe_read_csv("data/energia/energy_consuption_by_source.csv")
         if not ene.empty:
             ene.columns = ene.columns.str.strip().str.lower()
             if "year" in ene.columns:
                 ene = ene.rename(columns={"year": "Año"})
-            ene = _ensure_year_column(ene)
-            if "Año" in ene.columns:
-                # nos quedamos con *_consumption + algunas claves
-                keep = [c for c in ene.columns if c.endswith("_consumption")] + ["electricity_consumption", "renewables_consumption", "fossil_fuel_consumption", "Año"]
-                keep = list(dict.fromkeys([c for c in keep if c in ene.columns]))
-                ene = ene[keep].groupby("Año", as_index=False).sum(numeric_only=True)
-                nice = {
-                    "coal_consumption":"Coal_TWh",
-                    "oil_consumption":"Oil_TWh",
-                    "gas_consumption":"Gas_TWh",
-                    "nuclear_consumption":"Nuclear_TWh",
-                    "hydro_consumption":"Hydro_TWh",
-                    "biofuel_consumption":"Biofuel_TWh",
-                    "solar_consumption":"Solar_TWh",
-                    "wind_consumption":"Wind_TWh",
-                    "electricity_consumption":"Electricity_TWh",
-                    "renewables_consumption":"Renewables_TWh",
-                    "fossil_fuel_consumption":"Fossils_TWh",
-                }
-                ene = ene.rename(columns={k:v for k,v in nice.items() if k in ene.columns})
-            else:
-                ene = pd.DataFrame(columns=["Año"])
-        else:
-            ene = pd.DataFrame(columns=["Año"])
+            ene = ene.groupby("Año", as_index=False).sum(numeric_only=True)
+            nice = {
+                "coal_consumption": "Coal_TWh",
+                "oil_consumption": "Oil_TWh",
+                "gas_consumption": "Gas_TWh",
+                "renewables_consumption": "Renewables_TWh",
+                "fossil_fuel_consumption": "Fossils_TWh",
+            }
+            ene = ene.rename(columns=nice)
+            ene = ene[["Año"] + [v for v in nice.values() if v in ene.columns]]
         dfs.append(ene)
     except Exception as e:
         st.warning(f"⚠️ Energía: {e}")
         dfs.append(pd.DataFrame(columns=["Año"]))
 
-    # Merge maestro por año (solo con DFS que tengan 'Año')
+    # === Unión final ===
     df = None
     for d in dfs:
         if not d.empty and "Año" in d.columns:
