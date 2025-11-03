@@ -7,9 +7,6 @@ import numpy as np
 import plotly.express as px
 from sklearn.linear_model import LinearRegression
 
-st.set_page_config(page_title="🔗 Análisis multivariable", layout="wide")
-st.title("🔗 Análisis multivariable: clima ↔ sociedad")
-
 # -------------------------------------------------
 # CONFIGURACIÓN DE PÁGINA
 # -------------------------------------------------
