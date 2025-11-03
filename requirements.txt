@@ -1,11 +1,23 @@
+#Core
 streamlit
 pandas
 numpy
 plotly
+matplotlib
+seaborn
 folium
 geopandas
-seaborn
-matplotlib
+
+#Machine Learning y análisis
+scikit-learn
+statsmodels
+
+#Manipulación de archivos y exportación
+openpyxl
+xlrd
+Pillow
+
+#Extra para compatibilidad y utilidades
 pycountry
 xarray
-#calendar
+requests
