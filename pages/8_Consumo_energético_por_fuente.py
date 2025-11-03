@@ -371,16 +371,35 @@ else:
     st.info("Selecciona al menos una fuente energética y un rango válido para generar conclusiones.")
 
 # ------------------------------------------
-# DESCARGAS
+# DESCARGAS SEGURAS (evita fallo de Kaleido)
 # ------------------------------------------
-st.subheader("💾 Descargar resultados")
+st.subheader("💾 Exportar datos y gráficos")
+
 col1, col2 = st.columns(2)
+
+# 📄 Descarga de CSV
 with col1:
-    csv = df_f.to_csv(index=False).encode("utf-8")
-    st.download_button("📄 Descargar CSV (filtro actual)", data=csv,
-                       file_name="consumo_energetico_global_filtrado.csv", mime="text/csv")
+    try:
+        csv = df_filtrado.to_csv(index=False).encode("utf-8")
+        st.download_button("📄 Descargar CSV", data=csv,
+                           file_name="datos_filtrados.csv", mime="text/csv")
+    except Exception as e:
+        st.error(f"No se pudo generar el CSV: {e}")
+
+# 🖼️ Descarga de imagen o alternativa
 with col2:
-    buffer = BytesIO()
-    fig.write_image(buffer, format="png")
-    st.download_button("🖼️ Descargar gráfico principal (PNG)", data=buffer,
-                       file_name="grafico_consumo_energetico_global.png", mime="image/png")
+    try:
+        from io import BytesIO
+        import plotly.io as pio
+        buffer = BytesIO()
+        fig.write_image(buffer, format="png")
+        st.download_button("🖼️ Descargar gráfico (PNG)", data=buffer,
+                           file_name="grafico.png", mime="image/png")
+    except Exception as e:
+        st.warning("⚠️ No se pudo generar la imagen en Streamlit Cloud. "
+                   "Descarga el gráfico interactivo o los datos.")
+        # alternativa: HTML interactivo
+        html_bytes = fig.to_html().encode("utf-8")
+        st.download_button("🌐 Descargar gráfico (HTML interactivo)",
+                           data=html_bytes, file_name="grafico_interactivo.html", mime="text/html")
+
