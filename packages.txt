@@ -3,3 +3,7 @@ libglib2.0-0
 libsm6
 libxrender1
 libxext6
+libatk1.0-0
+libatk-bridge2.0-0
+libgtk-3-0
+libnss3
