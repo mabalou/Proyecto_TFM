@@ -485,20 +485,30 @@ with tab2:
         st.info("Configura países/métricas para visualizar resultados.")
 
 # ------------------------------------------
-# DESCARGAS SEGURAS (evita fallo de Kaleido)
+# DESCARGAS SEGURAS (auto-detector de DataFrame)
 # ------------------------------------------
 st.subheader("💾 Exportar datos y gráficos")
 
 col1, col2 = st.columns(2)
 
+# Detecta automáticamente el DataFrame usado en la página
+df_export = None
+for var_name in ["df_filtrado", "df", "df_fuentes", "df_resultado", "df_final"]:
+    if var_name in locals():
+        df_export = locals()[var_name]
+        break
+
 # 📄 Descarga de CSV
 with col1:
-    try:
-        csv = df_filtrado.to_csv(index=False).encode("utf-8")
-        st.download_button("📄 Descargar CSV", data=csv,
-                           file_name="datos_filtrados.csv", mime="text/csv")
-    except Exception as e:
-        st.error(f"No se pudo generar el CSV: {e}")
+    if df_export is not None and not df_export.empty:
+        try:
+            csv = df_export.to_csv(index=False).encode("utf-8")
+            st.download_button("📄 Descargar CSV", data=csv,
+                               file_name="datos_filtrados.csv", mime="text/csv")
+        except Exception as e:
+            st.error(f"No se pudo generar el CSV: {e}")
+    else:
+        st.info("No hay datos filtrados para exportar aún.")
 
 # 🖼️ Descarga de imagen o alternativa
 with col2:
@@ -509,9 +519,8 @@ with col2:
         fig.write_image(buffer, format="png")
         st.download_button("🖼️ Descargar gráfico (PNG)", data=buffer,
                            file_name="grafico.png", mime="image/png")
-    except Exception as e:
-        st.warning("⚠️ No se pudo generar la imagen en Streamlit Cloud. "
-                   "Descarga el gráfico interactivo o los datos.")
+    except Exception:
+        st.warning("⚠️ No se pudo generar la imagen (Kaleido no disponible en Streamlit Cloud).")
         # alternativa: HTML interactivo
         html_bytes = fig.to_html().encode("utf-8")
         st.download_button("🌐 Descargar gráfico (HTML interactivo)",
