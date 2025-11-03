@@ -379,7 +379,7 @@ col1, col2 = st.columns(2)
 
 # Detecta automáticamente el DataFrame usado en la página
 df_export = None
-for var_name in ["df_filtrado", "df", "df_fuentes", "df_resultado", "df_final"]:
+for var_name in ["df_f", "df_filtrado", "df", "df_fuentes", "df_resultado", "df_final"]:
     if var_name in locals():
         df_export = locals()[var_name]
         break
@@ -389,25 +389,36 @@ with col1:
     if df_export is not None and not df_export.empty:
         try:
             csv = df_export.to_csv(index=False).encode("utf-8")
-            st.download_button("📄 Descargar CSV", data=csv,
-                               file_name="datos_filtrados.csv", mime="text/csv")
+            st.download_button(
+                "📄 Descargar CSV",
+                data=csv,
+                file_name="consumo_energetico_filtrado.csv",
+                mime="text/csv"
+            )
         except Exception as e:
             st.error(f"No se pudo generar el CSV: {e}")
     else:
-        st.info("No hay datos filtrados para exportar aún.")
+        st.info("⚠️ No hay datos disponibles para exportar.")
 
-# 🖼️ Descarga de imagen o alternativa
+# 🖼️ Descarga de imagen (con fallback a HTML interactivo)
 with col2:
     try:
-        from io import BytesIO
         import plotly.io as pio
+        from io import BytesIO
         buffer = BytesIO()
         fig.write_image(buffer, format="png")
-        st.download_button("🖼️ Descargar gráfico (PNG)", data=buffer,
-                           file_name="grafico.png", mime="image/png")
+        st.download_button(
+            "🖼️ Descargar gráfico (PNG)",
+            data=buffer,
+            file_name="grafico_consumo_energetico.png",
+            mime="image/png"
+        )
     except Exception:
         st.warning("⚠️ No se pudo generar la imagen (Kaleido no disponible en Streamlit Cloud).")
-        # alternativa: HTML interactivo
         html_bytes = fig.to_html().encode("utf-8")
-        st.download_button("🌐 Descargar gráfico (HTML interactivo)",
-                           data=html_bytes, file_name="grafico_interactivo.html", mime="text/html")
+        st.download_button(
+            "🌐 Descargar gráfico (HTML interactivo)",
+            data=html_bytes,
+            file_name="grafico_interactivo.html",
+            mime="text/html"
+        )
