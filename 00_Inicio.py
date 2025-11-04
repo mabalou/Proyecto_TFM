@@ -1,5 +1,5 @@
 # ==========================================
-# 00_Inicio.py — Versión final horizontal, centrada y funcional
+# 00_Inicio.py — Versión final: navegación activa funcional + diseño perfecto
 # ==========================================
 import streamlit as st
 from pathlib import Path
@@ -7,23 +7,38 @@ from pathlib import Path
 st.set_page_config(page_title="🌍 Visualizador climático global del TFM", layout="wide")
 
 # ----------------------------------------------------
-# Ocultar sidebar y animar contenedor
+# Eliminar espacio superior, header y sidebar
 # ----------------------------------------------------
 st.markdown(
     """
     <style>
-    [data-testid="stSidebar"] {display: none;}
-    .block-container {
-        padding-top: 2rem;
-        padding-left: 3rem;
-        padding-right: 3rem;
-        max-width: 1500px;
-        animation: fadeIn 0.8s ease-in-out;
-    }
-    @keyframes fadeIn {
-        from {opacity: 0; transform: translateY(10px);}
-        to {opacity: 1; transform: translateY(0);}
-    }
+        [data-testid="stSidebar"] {display: none;}
+
+        header[data-testid="stHeader"] {
+            display: none;
+        }
+        section[data-testid="stToolbar"] {
+            display: none !important;
+        }
+
+        div.block-container {
+            padding-top: 0rem !important;
+            margin-top: 0.5rem !important;
+            padding-left: 3rem;
+            padding-right: 3rem;
+            max-width: 1500px;
+            animation: fadeIn 0.8s ease-in-out;
+        }
+
+        body {
+            margin-top: 0 !important;
+            padding-top: 0 !important;
+        }
+
+        @keyframes fadeIn {
+            from {opacity: 0; transform: translateY(10px);}
+            to {opacity: 1; transform: translateY(0);}
+        }
     </style>
     """,
     unsafe_allow_html=True,
@@ -46,110 +61,77 @@ PAGES = {
     "Mapa global": "10_Mapa_global",
 }
 
+# Inicializar estado si no existe
 if "current_page" not in st.session_state:
     st.session_state.current_page = "Inicio"
 
 # ----------------------------------------------------
-# MENÚ SUPERIOR — HORIZONTAL, CENTRADO Y ANIMADO
+# Capturar parámetro de URL (nuevo método correcto)
+# ----------------------------------------------------
+page_param = st.query_params.get("page")
+
+# Si el parámetro existe y es válido, actualizar el estado
+if page_param and page_param in PAGES:
+    st.session_state.current_page = page_param
+
+# ----------------------------------------------------
+# CABECERA — RECTÁNGULO OSCURO + MENÚ HORIZONTAL
 # ----------------------------------------------------
 st.markdown(
     """
     <style>
-    .nav-container {
+    .menu-container {
         position: sticky;
         top: 0;
         z-index: 999;
-        background-color: transparent;
-        padding: 1rem 2rem;
+        background-color: #1e1e1e;
+        border-radius: 15px;
+        padding: 1.2rem 2.5rem;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
         display: flex;
         justify-content: center;
         align-items: center;
-        gap: 2.2rem;
+        gap: 2.5rem;
         flex-wrap: wrap;
         margin-bottom: 3rem;
     }
 
-    div.stButton > button {
-        background: transparent !important;
-        border: none !important;
-        color: #b9b9b9 !important;
-        font-size: 1.05rem !important;
-        font-weight: 600 !important;
-        cursor: pointer;
-        transition: all 0.25s ease;
-        padding: 0 !important;
-        margin: 0 !important;
-        box-shadow: none !important;
-        position: relative;
+    .menu-link {
+        color: #b9b9b9;
+        font-size: 1.05rem;
+        font-weight: 600;
+        text-decoration: none !important;
+        transition: color 0.25s ease, border-bottom 0.25s ease;
+        padding-bottom: 3px;
+        border-bottom: 2px solid transparent;
     }
 
-    div.stButton > button:hover {
-        color: #2e9aff !important;
+    .menu-link.active {
+    color: #4da8ff;  /* Azul más suave */
+    border-bottom: 2px solid #4da8ff;
     }
-
-    div.stButton > button.active {
-        color: #2e9aff !important;
-        font-weight: 700 !important;
-    }
-
-    div.stButton > button.active::after {
-        content: "";
-        position: absolute;
-        bottom: -5px;
-        left: 0;
-        width: 100%;
-        height: 2px;
-        background-color: #2e9aff;
-        border-radius: 2px;
-        transform: scaleX(1);
-        transition: transform 0.3s ease;
-    }
-
-    div.stButton > button::after {
-        content: "";
-        position: absolute;
-        bottom: -5px;
-        left: 0;
-        width: 100%;
-        height: 2px;
-        background-color: #2e9aff;
-        border-radius: 2px;
-        transform: scaleX(0);
-        transition: transform 0.3s ease;
-    }
-
-    div.stButton > button:hover::after {
-        transform: scaleX(1);
+    .menu-link:hover {
+        color: #ffffff;
+        border-bottom: 2px solid #4da8ff;
     }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
-st.markdown('<div class="nav-container">', unsafe_allow_html=True)
+# --- Renderizado del menú horizontal ---
+menu_html = '<div class="menu-container">'
+for name, module in PAGES.items():
+    active_class = "active" if name == st.session_state.current_page else ""
+    menu_html += f'<a class="menu-link {active_class}" href="?page={name}" target="_self">{name}</a>'
+menu_html += "</div>"
 
-# --- Menú horizontal con columnas ---
-cols = st.columns(len(PAGES))
-for i, (name, module) in enumerate(PAGES.items()):
-    is_active = name == st.session_state.current_page
-    with cols[i]:
-        btn = st.button(name, key=name)
-        if btn:
-            st.session_state.current_page = name
-            st.rerun()
-        if is_active:
-            st.markdown(
-                f"<style>div[data-testid='stButton'] button[kind='secondary'][key='{name}']{{color:#2e9aff !important;font-weight:700 !important;border-bottom:2px solid #2e9aff !important;}}</style>",
-                unsafe_allow_html=True,
-            )
-
-st.markdown("</div>", unsafe_allow_html=True)
+st.markdown(menu_html, unsafe_allow_html=True)
 
 # ----------------------------------------------------
 # NAVEGACIÓN INTERNA
 # ----------------------------------------------------
 selected_module = PAGES[st.session_state.current_page]
-
 if selected_module != "00_Inicio":
     try:
         exec(Path(f"pages/{selected_module}.py").read_text(), globals())
@@ -179,17 +161,14 @@ st.markdown("---")
 st.subheader("Explora las secciones del análisis:")
 
 col1, col2, col3 = st.columns(3)
-
 with col1:
     st.image("images/energia.png", use_container_width=True)
     st.markdown("**Consumo energético por fuente**")
     st.caption("⚡ Analiza las tendencias del consumo energético global.")
-
 with col2:
     st.image("images/analisis.png", use_container_width=True)
     st.markdown("**Análisis multivariable**")
     st.caption("📊 Explora relaciones entre energía, economía y clima.")
-
 with col3:
     st.image("images/mapa.png", use_container_width=True)
     st.markdown("**Mapas interactivos**")
