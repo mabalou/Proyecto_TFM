@@ -1,5 +1,5 @@
 # ==========================================
-# 00_Inicio.py — Versión pastel ultra suave (con modo claro/oscuro persistente)
+# 00_Inicio.py — versión glass definitiva (expanders corregidos)
 # ==========================================
 import streamlit as st
 from pathlib import Path
@@ -7,42 +7,24 @@ from pathlib import Path
 st.set_page_config(page_title="🌍 Visualizador climático global del TFM", layout="wide")
 
 # ----------------------------------------------------
-# Eliminar espacio superior, header y sidebar
+# Ocultar barra lateral y header
 # ----------------------------------------------------
-st.markdown(
-    """
-    <style>
-        [data-testid="stSidebar"] {display: none;}
-
-        header[data-testid="stHeader"] {
-            display: none;
-        }
-        section[data-testid="stToolbar"] {
-            display: none !important;
-        }
-
-        div.block-container {
-            padding-top: 0rem !important;
-            margin-top: 0.5rem !important;
-            padding-left: 3rem;
-            padding-right: 3rem;
-            max-width: 1500px;
-            animation: fadeIn 0.8s ease-in-out;
-        }
-
-        body {
-            margin-top: 0 !important;
-            padding-top: 0 !important;
-        }
-
-        @keyframes fadeIn {
-            from {opacity: 0; transform: translateY(10px);}
-            to {opacity: 1; transform: translateY(0);}
-        }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+st.markdown("""
+<style>
+[data-testid="stSidebar"] {display: none;}
+header[data-testid="stHeader"], section[data-testid="stToolbar"] {display: none !important;}
+div.block-container {
+    padding-left: 3rem;
+    padding-right: 3rem;
+    max-width: 1500px;
+    animation: fadeIn 0.8s ease-in-out;
+}
+@keyframes fadeIn {
+    from {opacity: 0; transform: translateY(10px);}
+    to {opacity: 1; transform: translateY(0);}
+}
+</style>
+""", unsafe_allow_html=True)
 
 # ----------------------------------------------------
 # Definición de páginas
@@ -62,7 +44,7 @@ PAGES = {
 }
 
 # ----------------------------------------------------
-# ESTADO INICIAL DE NAVEGACIÓN
+# Estado de página y tema
 # ----------------------------------------------------
 if "current_page" not in st.session_state:
     st.session_state.current_page = "Inicio"
@@ -71,209 +53,190 @@ page_param = st.query_params.get("page")
 if page_param and page_param in PAGES:
     st.session_state.current_page = page_param
 
-# ----------------------------------------------------
-# GESTIÓN DE TEMA GLOBAL (persistente entre páginas)
-# ----------------------------------------------------
 if "theme" not in st.session_state:
     st.session_state.theme = "dark"
 
 url_theme = st.query_params.get("theme")
 if url_theme in ("light", "dark"):
     st.session_state.theme = url_theme
-
-# Mantener sincronizado el parámetro de la URL
 if st.query_params.get("theme") != st.session_state.theme:
     st.query_params.update({"theme": st.session_state.theme})
-
 current_theme = st.session_state.theme
 
 # ----------------------------------------------------
-# ESTILOS DEL MENÚ (pastel suave)
-# ----------------------------------------------------
-st.markdown(
-    """
-    <style>
-    .menu-container {
-        position: sticky;
-        top: 0;
-        z-index: 999;
-        border-radius: 15px;
-        padding: 1.2rem 2.5rem;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        gap: 2.5rem;
-        flex-wrap: wrap;
-        margin-bottom: 3rem;
-    }
-
-    .menu-link {
-        font-size: 1.05rem;
-        font-weight: 600;
-        text-decoration: none !important;
-        transition: color 0.25s ease, border-bottom 0.25s ease;
-        padding-bottom: 3px;
-        border-bottom: 2px solid transparent;
-    }
-
-    .menu-link.active {
-        font-weight: 700;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-# ----------------------------------------------------
-# MENÚ (mantiene el tema actual en los enlaces)
-# ----------------------------------------------------
-menu_html = '<div class="menu-container">'
-for name, module in PAGES.items():
-    active_class = "active" if name == st.session_state.current_page else ""
-    menu_html += (
-        f'<a class="menu-link {active_class}" '
-        f'href="?page={name}&theme={current_theme}" target="_self">{name}</a>'
-    )
-menu_html += "</div>"
-st.markdown(menu_html, unsafe_allow_html=True)
-
-# ----------------------------------------------------
-# TOGGLE MODO CLARO / OSCURO — persistente y en misma pestaña
+# Cabecera glass + menú + switch
 # ----------------------------------------------------
 other_theme = "light" if current_theme == "dark" else "dark"
 label_text = "☀️ Modo claro" if current_theme == "light" else "🌙 Modo oscuro"
 toggle_url = f"?page={st.session_state.current_page}&theme={other_theme}"
 
-st.markdown(
-    f"""
-    <style>
-    .theme-toggle-container {{
-        position: fixed;
-        top: 0.2rem;
-        right: 1.2rem;
-        z-index: 9999;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        background: var(--toggle-bg);
-        border-radius: 25px;
-        padding: 6px 14px;
-        box-shadow: 0 4px 14px rgba(0,0,0,0.35);
-        font-size: 0.9rem;
-        font-weight: 600;
-        color: var(--toggle-text);
-        transition: all 0.3s ease;
-    }}
-    .toggle-switch {{
-        position: relative;
-        width: 52px;
-        height: 26px;
-        background: var(--switch-bg);
-        border-radius: 34px;
-        cursor: pointer;
-        transition: background 0.25s ease;
-        display: inline-block;
-        text-decoration: none !important;
-    }}
-    .toggle-switch::before {{
-        content: "";
-        position: absolute;
-        top: 3px;
-        left: 3px;
-        width: 20px;
-        height: 20px;
-        background: var(--switch-ball);
-        border-radius: 50%;
-        transition: transform 0.25s ease, background 0.25s ease;
-    }}
-
-    :root {{
-        --bg-color: #0f0f0f;
-        --text-color: #f0f0f0;
-        --menu-bg: #1e1e1e;
-        --menu-link: #c5c5c5;
-        --menu-active: #aeeae1;
-        --toggle-bg: #1e1e1e;
-        --toggle-text: #e0e0e0;
-        --switch-bg: #3b3b3b;
-        --switch-ball: #aeeae1;
-    }}
-
-    {"".join([
-        ":root {",
-        "--bg-color: #f9f9f7;",
-        "--text-color: #1a1a1a;",
-        "--menu-bg: #f4f4f4;",
-        "--menu-link: #2f3b40;",
-        "--menu-active: #52c7b8;",
-        "--toggle-bg: #f4f4f4;",
-        "--toggle-text: #2f3b40;",
-        "--switch-bg: #ccc;",
-        "--switch-ball: #2f3b40;",
-        "}"
-    ]) if current_theme == "light" else ""}
-
-    .theme-toggle-container.is-light .toggle-switch::before {{
-        transform: translateX(26px);
-    }}
-
-    [data-testid="stAppViewContainer"] {{
-        background-color: var(--bg-color);
-        color: var(--text-color);
-        transition: background-color 0.3s ease, color 0.3s ease;
-    }}
-
-    .menu-container {{
-        background-color: var(--menu-bg) !important;
-        margin-top: 0.3rem !important;
-    }}
-
-    .menu-link {{
-        color: var(--menu-link) !important;
-    }}
-
-    .menu-link.active, .menu-link:hover {{
-        color: var(--menu-active) !important;
-        border-bottom: 2px solid var(--menu-active) !important;
-    }}
-    </style>
-
-    <div class="theme-toggle-container {'is-light' if current_theme == 'light' else ''}">
-        <span>{label_text}</span>
-        <a class="toggle-switch" href="{toggle_url}" target="_self" title="Cambiar tema"></a>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
+menu_items = ""
+for name, module in PAGES.items():
+    active = "active" if name == st.session_state.current_page else ""
+    menu_items += f'<a class="menu-link {active}" href="?page={name}&theme={current_theme}" target="_self">{name}</a>'
 
 # ----------------------------------------------------
-# NAVEGACIÓN
+# Estilos principales (corregidos)
+# ----------------------------------------------------
+st.markdown(f"""
+<style>
+.header-bar {{
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 9999;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 1rem 2rem;
+    border-radius: 0 0 18px 18px;
+    background: rgba(30,30,30,0.85);
+    box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+    backdrop-filter: blur(12px);
+    transition: background 0.4s ease, color 0.4s ease;
+}}
+div.block-container {{ padding-top: 7.2rem !important; }}
+
+.menu-links {{
+    display: flex; flex-wrap: wrap; gap: 1.8rem; justify-content: center; align-items: center;
+}}
+.menu-link {{
+    font-size: 1.05rem; font-weight: 600;
+    text-decoration: none !important; border-bottom: 2px solid transparent;
+    transition: all 0.25s ease; color: var(--menu-link);
+}}
+.menu-link:hover, .menu-link.active {{
+    color: var(--menu-active);
+    border-bottom: 2px solid var(--menu-active);
+}}
+
+.theme-toggle {{
+    display: flex; align-items: center; gap: 10px;
+    background: var(--toggle-bg);
+    border-radius: 25px; padding: 6px 14px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+    font-size: 0.9rem; font-weight: 600;
+    color: var(--toggle-text); white-space: nowrap;
+}}
+.toggle-switch {{
+    position: relative; width: 50px; height: 26px;
+    background: var(--switch-bg);
+    border-radius: 34px; cursor: pointer;
+    display: inline-block; overflow: hidden;
+}}
+.toggle-switch::before {{
+    content: ""; position: absolute; top: 3px; left: 3px;
+    width: 20px; height: 20px;
+    background: var(--switch-ball); border-radius: 50%;
+    transition: transform 0.25s ease, background 0.25s ease;
+}}
+
+/* ===========================
+   MODO OSCURO
+   =========================== */
+:root {{
+    --bg-color: #0f0f0f;
+    --text-color: #f0f0f0;
+    --menu-bg: rgba(30,30,30,0.85);
+    --menu-link: #cfdedf;
+    --menu-active: #aeeae1;
+    --toggle-bg: #1e1e1e;
+    --toggle-text: #e0e0e0;
+    --switch-bg: #3b3b3b;
+    --switch-ball: #aeeae1;
+    --input-bg: #1b1b1b;
+    --button-bg: #1e1e1e;
+    --button-text: #f0f0f0;
+    --metric-text: #ffffff;
+    --primary-color: #aeeae1;
+}}
+
+/* ===========================
+   MODO CLARO MEJORADO
+   =========================== */
+{"".join([
+    ":root {",
+    "--bg-color: #f7f7f5;",
+    "--text-color: #1b1b1b;",
+    "--menu-bg: rgba(255,255,255,0.9);",
+    "--menu-link: #2b3a3a;",
+    "--menu-active: #007b7b;",
+    "--toggle-bg: #ffffff;",
+    "--toggle-text: #2b3a3a;",
+    "--switch-bg: #bbb;",
+    "--switch-ball: #007b7b;",
+    "--input-bg: #ffffff;",
+    "--button-bg: #f0f0f0;",
+    "--button-text: #1a1a1a;",
+    "--metric-text: #111;",
+    "--primary-color: #007b7b;",
+    "}"
+]) if current_theme == "light" else ""}
+
+.theme-toggle.is-light .toggle-switch::before {{ transform: translateX(24px); }}
+
+[data-testid="stAppViewContainer"] {{
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    transition: background-color 0.3s ease, color 0.3s ease;
+}}
+
+/* ===========================
+   EXPANDERS 100% CORREGIDOS
+   =========================== */
+[data-testid="stExpander"], 
+[data-testid="stExpanderContent"],
+[data-testid="stExpander"] div[role="region"],
+[data-testid="stExpander"] div[data-testid="stVerticalBlock"],
+[data-testid="stExpander"] div[role="button"],
+[data-testid="stExpander"] * {{
+    background-color: var(--input-bg) !important;
+    color: var(--text-color) !important;
+    border: none !important;
+    border-radius: 10px !important;
+}}
+[data-testid="stExpander"] p, [data-testid="stExpander"] span, [data-testid="stExpander"] li {{
+    color: var(--text-color) !important;
+}}
+
+/* ===========================
+   MÉTRICAS / BOTONES
+   =========================== */
+[data-testid="stMetric"], [data-testid="stMetricLabel"], [data-testid="stMetricValue"],
+button, .stButton>button {{
+    color: var(--metric-text) !important;
+    background-color: var(--button-bg) !important;
+}}
+</style>
+
+<div class="header-bar" style="background: var(--menu-bg);">
+    <div class="menu-links">{menu_items}</div>
+    <div class="theme-toggle {'is-light' if current_theme == 'light' else ''}">
+        <span>{label_text}</span>
+        <a class="toggle-switch" href="{toggle_url}" target="_self"></a>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+# ----------------------------------------------------
+# Navegación
 # ----------------------------------------------------
 selected_module = PAGES[st.session_state.current_page]
 if selected_module != "00_Inicio":
-    try:
-        exec(Path(f"pages/{selected_module}.py").read_text(), globals())
-    except Exception as e:
-        st.error(f"⚠️ No se pudo cargar la página: {e}")
+    exec(Path(f"pages/{selected_module}.py").read_text(), globals())
     st.stop()
 
 # ----------------------------------------------------
-# CONTENIDO DE LA PÁGINA INICIO
+# Contenido principal
 # ----------------------------------------------------
-st.markdown(
-    """
-    <div style='text-align: center;'>
-        <h1 style='font-size:2.3rem; font-weight:800; margin-bottom:0.6rem;'>🌍 Visualizador climático global del TFM</h1>
-        <p style='font-size:1.15rem; line-height:1.6em; max-width:900px; margin:auto;'>
-        Este proyecto forma parte del <b>Trabajo de Fin de Máster</b> del programa
-        <b>Máster en Big Data & Visual Analytics</b> (UNIR).<br><br>
-        Explora cómo el <b>cambio climático global</b> se relaciona con variables
-        socioeconómicas, energéticas y ambientales a lo largo del tiempo.
-        </p>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
+st.markdown("""
+<div style='text-align:center;margin-top:1.2rem;'>
+    <h1 style='font-size:2.3rem;font-weight:800;margin-bottom:0.6rem;'>🌍 Visualizador climático global del TFM</h1>
+    <p style='font-size:1.15rem;line-height:1.6em;max-width:900px;margin:auto;'>
+    Este proyecto forma parte del <b>Trabajo de Fin de Máster</b> del programa
+    <b>Máster en Big Data & Visual Analytics</b> (UNIR).<br><br>
+    Explora cómo el <b>cambio climático global</b> se relaciona con variables
+    socioeconómicas, energéticas y ambientales a lo largo del tiempo.
+    </p>
+</div>
+""", unsafe_allow_html=True)
 
 st.markdown("---")
 st.subheader("Explora las secciones del análisis:")
@@ -293,7 +256,4 @@ with col3:
     st.caption("🗺️ Visualiza indicadores climáticos y socioeconómicos por país.")
 
 st.markdown("---")
-st.markdown(
-    "<p style='text-align:center; color:#888;'>TFM | Marcos Abal Outeda · 2025</p>",
-    unsafe_allow_html=True,
-)
+st.markdown("<p style='text-align:center;color:#888;'>TFM | Marcos Abal Outeda · 2025</p>", unsafe_allow_html=True)
