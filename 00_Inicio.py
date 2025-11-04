@@ -1,5 +1,5 @@
 # ==========================================
-# 00_Inicio.py — Versión final: navegación activa funcional + diseño perfecto
+# 00_Inicio.py — Versión pastel ultra suave (más apagada y relajada)
 # ==========================================
 import streamlit as st
 from pathlib import Path
@@ -61,21 +61,17 @@ PAGES = {
     "Mapa global": "10_Mapa_global",
 }
 
-# Inicializar estado si no existe
+# Estado inicial
 if "current_page" not in st.session_state:
     st.session_state.current_page = "Inicio"
 
-# ----------------------------------------------------
-# Capturar parámetro de URL (nuevo método correcto)
-# ----------------------------------------------------
+# Capturar parámetro de URL
 page_param = st.query_params.get("page")
-
-# Si el parámetro existe y es válido, actualizar el estado
 if page_param and page_param in PAGES:
     st.session_state.current_page = page_param
 
 # ----------------------------------------------------
-# CABECERA — RECTÁNGULO OSCURO + MENÚ HORIZONTAL
+# CABECERA — RECTÁNGULO OSCURO + MENÚ HORIZONTAL pastel suave
 # ----------------------------------------------------
 st.markdown(
     """
@@ -96,8 +92,9 @@ st.markdown(
         margin-bottom: 3rem;
     }
 
+    /* Texto base muy suave */
     .menu-link {
-        color: #b9b9b9;
+        color: #cfdedf; /* gris verdoso pálido */
         font-size: 1.05rem;
         font-weight: 600;
         text-decoration: none !important;
@@ -106,30 +103,175 @@ st.markdown(
         border-bottom: 2px solid transparent;
     }
 
-    .menu-link.active {
-    color: #4da8ff;  /* Azul más suave */
-    border-bottom: 2px solid #4da8ff;
-    }
+    /* Hover: tono menta pastel */
     .menu-link:hover {
-        color: #ffffff;
-        border-bottom: 2px solid #4da8ff;
+        color: #aeeae1;
+        border-bottom: 2px solid #aeeae1;
+    }
+
+    /* Activo: mismo tono, más visible */
+    .menu-link.active {
+        color: #aeeae1;
+        font-weight: 700;
+        border-bottom: 2px solid #aeeae1;
     }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
-# --- Renderizado del menú horizontal ---
+# --- Renderizado del menú ---
 menu_html = '<div class="menu-container">'
 for name, module in PAGES.items():
     active_class = "active" if name == st.session_state.current_page else ""
     menu_html += f'<a class="menu-link {active_class}" href="?page={name}" target="_self">{name}</a>'
 menu_html += "</div>"
-
 st.markdown(menu_html, unsafe_allow_html=True)
 
+# ==========================================
+# Toggle Modo Claro / Oscuro — Versión funcional para Streamlit (corregido)
+# ==========================================
+st.markdown(
+    """
+    <style>
+    /* Posición y estilo del switch */
+    .theme-toggle-container {
+        position: fixed;
+        top: 0.2rem;  /* más arriba */
+        right: 1.2rem;
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: var(--toggle-bg);
+        border-radius: 25px;
+        padding: 6px 14px;
+        box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: var(--toggle-text);
+        transition: all 0.3s ease;
+    }
+
+    .toggle-switch {
+        position: relative;
+        width: 52px;
+        height: 26px;
+        background: var(--switch-bg);
+        border-radius: 34px;
+        cursor: pointer;
+        transition: background 0.25s ease;
+    }
+
+    .toggle-switch::before {
+        content: "";
+        position: absolute;
+        top: 3px;
+        left: 3px;
+        width: 20px;
+        height: 20px;
+        background: var(--switch-ball);
+        border-radius: 50%;
+        transition: transform 0.25s ease, background 0.25s ease;
+    }
+
+    /* Variables por defecto (modo oscuro) */
+    :root {
+        --bg-color: #0f0f0f;
+        --text-color: #f0f0f0;
+        --menu-bg: #1e1e1e;
+        --menu-link: #c5c5c5;
+        --menu-active: #aeeae1;
+        --toggle-bg: #1e1e1e;
+        --toggle-text: #e0e0e0;
+        --switch-bg: #3b3b3b;
+        --switch-ball: #aeeae1;
+    }
+
+    /* Variables para modo claro */
+    [data-theme="light"] {
+        --bg-color: #f9f9f7;
+        --text-color: #1a1a1a;
+        --menu-bg: #f4f4f4;
+        --menu-link: #2f3b40;
+        --menu-active: #52c7b8;
+        --toggle-bg: #f4f4f4;
+        --toggle-text: #2f3b40;
+        --switch-bg: #ccc;
+        --switch-ball: #2f3b40;
+    }
+
+    [data-theme="light"] .toggle-switch::before {
+        transform: translateX(26px);
+    }
+
+    /* Aplicar los colores a la app */
+    [data-testid="stAppViewContainer"] {
+        background-color: var(--bg-color);
+        color: var(--text-color);
+        transition: background-color 0.3s ease, color 0.3s ease;
+    }
+
+    .menu-container {
+        background-color: var(--menu-bg) !important;
+        margin-top: 0.3rem !important;
+    }
+
+    .menu-link {
+        color: var(--menu-link) !important;
+    }
+
+    .menu-link.active, .menu-link:hover {
+        color: var(--menu-active) !important;
+        border-bottom: 2px solid var(--menu-active) !important;
+    }
+    </style>
+
+    <div class="theme-toggle-container" id="themeBox">
+        <span id="themeLabel">🌙 Modo oscuro</span>
+        <div class="toggle-switch" id="themeToggle"></div>
+    </div>
+
+    <script>
+    (function(){
+        const root = document.querySelector('[data-testid="stAppViewContainer"]');
+        const label = document.getElementById('themeLabel');
+        const toggle = document.getElementById('themeToggle');
+
+        function initTheme(){
+            if (!root || !label || !toggle) {
+                setTimeout(initTheme, 100);
+                return;
+            }
+
+            function setTheme(mode){
+                root.setAttribute('data-theme', mode);
+                label.textContent = (mode === 'light') ? '☀️ Modo claro' : '🌙 Modo oscuro';
+                localStorage.setItem('tfm_theme', mode);
+            }
+
+            let mode = localStorage.getItem('tfm_theme');
+            if (!mode){
+                const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                mode = prefersDark ? 'dark' : 'light';
+            }
+            setTheme(mode);
+
+            toggle.addEventListener('click', ()=>{
+                mode = (root.getAttribute('data-theme') === 'light') ? 'dark' : 'light';
+                setTheme(mode);
+            });
+        }
+
+        initTheme();
+    })();
+    </script>
+    """,
+    unsafe_allow_html=True,
+)
+
 # ----------------------------------------------------
-# NAVEGACIÓN INTERNA
+# NAVEGACIÓN
 # ----------------------------------------------------
 selected_module = PAGES[st.session_state.current_page]
 if selected_module != "00_Inicio":
@@ -140,7 +282,7 @@ if selected_module != "00_Inicio":
     st.stop()
 
 # ----------------------------------------------------
-# CONTENIDO DE INICIO — CENTRADO
+# CONTENIDO INICIO
 # ----------------------------------------------------
 st.markdown(
     """
