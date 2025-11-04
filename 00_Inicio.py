@@ -1,5 +1,5 @@
 # ==========================================
-# 00_Inicio.py — Versión pastel ultra suave (más apagada y relajada)
+# 00_Inicio.py — Versión pastel ultra suave (con modo claro/oscuro persistente)
 # ==========================================
 import streamlit as st
 from pathlib import Path
@@ -61,17 +61,34 @@ PAGES = {
     "Mapa global": "10_Mapa_global",
 }
 
-# Estado inicial
+# ----------------------------------------------------
+# ESTADO INICIAL DE NAVEGACIÓN
+# ----------------------------------------------------
 if "current_page" not in st.session_state:
     st.session_state.current_page = "Inicio"
 
-# Capturar parámetro de URL
 page_param = st.query_params.get("page")
 if page_param and page_param in PAGES:
     st.session_state.current_page = page_param
 
 # ----------------------------------------------------
-# CABECERA — RECTÁNGULO OSCURO + MENÚ HORIZONTAL pastel suave
+# GESTIÓN DE TEMA GLOBAL (persistente entre páginas)
+# ----------------------------------------------------
+if "theme" not in st.session_state:
+    st.session_state.theme = "dark"
+
+url_theme = st.query_params.get("theme")
+if url_theme in ("light", "dark"):
+    st.session_state.theme = url_theme
+
+# Mantener sincronizado el parámetro de la URL
+if st.query_params.get("theme") != st.session_state.theme:
+    st.query_params.update({"theme": st.session_state.theme})
+
+current_theme = st.session_state.theme
+
+# ----------------------------------------------------
+# ESTILOS DEL MENÚ (pastel suave)
 # ----------------------------------------------------
 st.markdown(
     """
@@ -80,10 +97,8 @@ st.markdown(
         position: sticky;
         top: 0;
         z-index: 999;
-        background-color: #1e1e1e;
         border-radius: 15px;
         padding: 1.2rem 2.5rem;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
         display: flex;
         justify-content: center;
         align-items: center;
@@ -92,9 +107,7 @@ st.markdown(
         margin-bottom: 3rem;
     }
 
-    /* Texto base muy suave */
     .menu-link {
-        color: #cfdedf; /* gris verdoso pálido */
         font-size: 1.05rem;
         font-weight: 600;
         text-decoration: none !important;
@@ -103,41 +116,40 @@ st.markdown(
         border-bottom: 2px solid transparent;
     }
 
-    /* Hover: tono menta pastel */
-    .menu-link:hover {
-        color: #aeeae1;
-        border-bottom: 2px solid #aeeae1;
-    }
-
-    /* Activo: mismo tono, más visible */
     .menu-link.active {
-        color: #aeeae1;
         font-weight: 700;
-        border-bottom: 2px solid #aeeae1;
     }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
-# --- Renderizado del menú ---
+# ----------------------------------------------------
+# MENÚ (mantiene el tema actual en los enlaces)
+# ----------------------------------------------------
 menu_html = '<div class="menu-container">'
 for name, module in PAGES.items():
     active_class = "active" if name == st.session_state.current_page else ""
-    menu_html += f'<a class="menu-link {active_class}" href="?page={name}" target="_self">{name}</a>'
+    menu_html += (
+        f'<a class="menu-link {active_class}" '
+        f'href="?page={name}&theme={current_theme}" target="_self">{name}</a>'
+    )
 menu_html += "</div>"
 st.markdown(menu_html, unsafe_allow_html=True)
 
-# ==========================================
-# Toggle Modo Claro / Oscuro — Versión funcional para Streamlit (corregido)
-# ==========================================
+# ----------------------------------------------------
+# TOGGLE MODO CLARO / OSCURO — persistente y en misma pestaña
+# ----------------------------------------------------
+other_theme = "light" if current_theme == "dark" else "dark"
+label_text = "☀️ Modo claro" if current_theme == "light" else "🌙 Modo oscuro"
+toggle_url = f"?page={st.session_state.current_page}&theme={other_theme}"
+
 st.markdown(
-    """
+    f"""
     <style>
-    /* Posición y estilo del switch */
-    .theme-toggle-container {
+    .theme-toggle-container {{
         position: fixed;
-        top: 0.2rem;  /* más arriba */
+        top: 0.2rem;
         right: 1.2rem;
         z-index: 9999;
         display: flex;
@@ -151,9 +163,8 @@ st.markdown(
         font-weight: 600;
         color: var(--toggle-text);
         transition: all 0.3s ease;
-    }
-
-    .toggle-switch {
+    }}
+    .toggle-switch {{
         position: relative;
         width: 52px;
         height: 26px;
@@ -161,9 +172,10 @@ st.markdown(
         border-radius: 34px;
         cursor: pointer;
         transition: background 0.25s ease;
-    }
-
-    .toggle-switch::before {
+        display: inline-block;
+        text-decoration: none !important;
+    }}
+    .toggle-switch::before {{
         content: "";
         position: absolute;
         top: 3px;
@@ -173,10 +185,9 @@ st.markdown(
         background: var(--switch-ball);
         border-radius: 50%;
         transition: transform 0.25s ease, background 0.25s ease;
-    }
+    }}
 
-    /* Variables por defecto (modo oscuro) */
-    :root {
+    :root {{
         --bg-color: #0f0f0f;
         --text-color: #f0f0f0;
         --menu-bg: #1e1e1e;
@@ -186,86 +197,51 @@ st.markdown(
         --toggle-text: #e0e0e0;
         --switch-bg: #3b3b3b;
         --switch-ball: #aeeae1;
-    }
+    }}
 
-    /* Variables para modo claro */
-    [data-theme="light"] {
-        --bg-color: #f9f9f7;
-        --text-color: #1a1a1a;
-        --menu-bg: #f4f4f4;
-        --menu-link: #2f3b40;
-        --menu-active: #52c7b8;
-        --toggle-bg: #f4f4f4;
-        --toggle-text: #2f3b40;
-        --switch-bg: #ccc;
-        --switch-ball: #2f3b40;
-    }
+    {"".join([
+        ":root {",
+        "--bg-color: #f9f9f7;",
+        "--text-color: #1a1a1a;",
+        "--menu-bg: #f4f4f4;",
+        "--menu-link: #2f3b40;",
+        "--menu-active: #52c7b8;",
+        "--toggle-bg: #f4f4f4;",
+        "--toggle-text: #2f3b40;",
+        "--switch-bg: #ccc;",
+        "--switch-ball: #2f3b40;",
+        "}"
+    ]) if current_theme == "light" else ""}
 
-    [data-theme="light"] .toggle-switch::before {
+    .theme-toggle-container.is-light .toggle-switch::before {{
         transform: translateX(26px);
-    }
+    }}
 
-    /* Aplicar los colores a la app */
-    [data-testid="stAppViewContainer"] {
+    [data-testid="stAppViewContainer"] {{
         background-color: var(--bg-color);
         color: var(--text-color);
         transition: background-color 0.3s ease, color 0.3s ease;
-    }
+    }}
 
-    .menu-container {
+    .menu-container {{
         background-color: var(--menu-bg) !important;
         margin-top: 0.3rem !important;
-    }
+    }}
 
-    .menu-link {
+    .menu-link {{
         color: var(--menu-link) !important;
-    }
+    }}
 
-    .menu-link.active, .menu-link:hover {
+    .menu-link.active, .menu-link:hover {{
         color: var(--menu-active) !important;
         border-bottom: 2px solid var(--menu-active) !important;
-    }
+    }}
     </style>
 
-    <div class="theme-toggle-container" id="themeBox">
-        <span id="themeLabel">🌙 Modo oscuro</span>
-        <div class="toggle-switch" id="themeToggle"></div>
+    <div class="theme-toggle-container {'is-light' if current_theme == 'light' else ''}">
+        <span>{label_text}</span>
+        <a class="toggle-switch" href="{toggle_url}" target="_self" title="Cambiar tema"></a>
     </div>
-
-    <script>
-    (function(){
-        const root = document.querySelector('[data-testid="stAppViewContainer"]');
-        const label = document.getElementById('themeLabel');
-        const toggle = document.getElementById('themeToggle');
-
-        function initTheme(){
-            if (!root || !label || !toggle) {
-                setTimeout(initTheme, 100);
-                return;
-            }
-
-            function setTheme(mode){
-                root.setAttribute('data-theme', mode);
-                label.textContent = (mode === 'light') ? '☀️ Modo claro' : '🌙 Modo oscuro';
-                localStorage.setItem('tfm_theme', mode);
-            }
-
-            let mode = localStorage.getItem('tfm_theme');
-            if (!mode){
-                const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-                mode = prefersDark ? 'dark' : 'light';
-            }
-            setTheme(mode);
-
-            toggle.addEventListener('click', ()=>{
-                mode = (root.getAttribute('data-theme') === 'light') ? 'dark' : 'light';
-                setTheme(mode);
-            });
-        }
-
-        initTheme();
-    })();
-    </script>
     """,
     unsafe_allow_html=True,
 )
@@ -282,7 +258,7 @@ if selected_module != "00_Inicio":
     st.stop()
 
 # ----------------------------------------------------
-# CONTENIDO INICIO
+# CONTENIDO DE LA PÁGINA INICIO
 # ----------------------------------------------------
 st.markdown(
     """
