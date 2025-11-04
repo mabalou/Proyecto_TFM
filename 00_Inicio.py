@@ -1,9 +1,8 @@
 # ==========================================
-# 00_Inicio.py — Versión final (visual y funcional)
+# 00_Inicio.py — Versión final horizontal, centrada y funcional
 # ==========================================
 import streamlit as st
 from pathlib import Path
-import importlib
 
 st.set_page_config(page_title="🌍 Visualizador climático global del TFM", layout="wide")
 
@@ -51,7 +50,7 @@ if "current_page" not in st.session_state:
     st.session_state.current_page = "Inicio"
 
 # ----------------------------------------------------
-# MENÚ SUPERIOR — FUNCIONAL Y VISUAL
+# MENÚ SUPERIOR — HORIZONTAL, CENTRADO Y ANIMADO
 # ----------------------------------------------------
 st.markdown(
     """
@@ -59,17 +58,17 @@ st.markdown(
     .nav-container {
         position: sticky;
         top: 0;
-        z-index: 100;
-        background-color: #1e1e1e;
-        border-radius: 12px;
-        padding: 1.2rem 2.5rem;
+        z-index: 999;
+        background-color: transparent;
+        padding: 1rem 2rem;
         display: flex;
         justify-content: center;
-        flex-wrap: wrap;
+        align-items: center;
         gap: 2.2rem;
-        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
-        margin-bottom: 2.8rem;
+        flex-wrap: wrap;
+        margin-bottom: 3rem;
     }
+
     div.stButton > button {
         background: transparent !important;
         border: none !important;
@@ -81,15 +80,46 @@ st.markdown(
         padding: 0 !important;
         margin: 0 !important;
         box-shadow: none !important;
+        position: relative;
     }
+
     div.stButton > button:hover {
         color: #2e9aff !important;
     }
+
     div.stButton > button.active {
         color: #2e9aff !important;
         font-weight: 700 !important;
-        border-bottom: 2px solid #2e9aff !important;
-        padding-bottom: 2px;
+    }
+
+    div.stButton > button.active::after {
+        content: "";
+        position: absolute;
+        bottom: -5px;
+        left: 0;
+        width: 100%;
+        height: 2px;
+        background-color: #2e9aff;
+        border-radius: 2px;
+        transform: scaleX(1);
+        transition: transform 0.3s ease;
+    }
+
+    div.stButton > button::after {
+        content: "";
+        position: absolute;
+        bottom: -5px;
+        left: 0;
+        width: 100%;
+        height: 2px;
+        background-color: #2e9aff;
+        border-radius: 2px;
+        transform: scaleX(0);
+        transition: transform 0.3s ease;
+    }
+
+    div.stButton > button:hover::after {
+        transform: scaleX(1);
     }
     </style>
     """,
@@ -98,7 +128,7 @@ st.markdown(
 
 st.markdown('<div class="nav-container">', unsafe_allow_html=True)
 
-# Menú con botones Streamlit (funcionales)
+# --- Menú horizontal con columnas ---
 cols = st.columns(len(PAGES))
 for i, (name, module) in enumerate(PAGES.items()):
     is_active = name == st.session_state.current_page
@@ -109,7 +139,7 @@ for i, (name, module) in enumerate(PAGES.items()):
             st.rerun()
         if is_active:
             st.markdown(
-                f"<style>div[data-testid='stButton'] button#{name.replace(' ','_')}{{color:#2e9aff !important;font-weight:700 !important;border-bottom:2px solid #2e9aff !important;}}</style>",
+                f"<style>div[data-testid='stButton'] button[kind='secondary'][key='{name}']{{color:#2e9aff !important;font-weight:700 !important;border-bottom:2px solid #2e9aff !important;}}</style>",
                 unsafe_allow_html=True,
             )
 
@@ -128,18 +158,19 @@ if selected_module != "00_Inicio":
     st.stop()
 
 # ----------------------------------------------------
-# CONTENIDO DE INICIO
+# CONTENIDO DE INICIO — CENTRADO
 # ----------------------------------------------------
-st.title("🌍 Visualizador climático global del TFM")
-
 st.markdown(
     """
-    <p style='font-size:1.15rem; line-height:1.6em;'>
-    Este proyecto forma parte del <b>Trabajo de Fin de Máster</b> del programa
-    <b>Máster en Big Data & Visual Analytics</b> (UNIR).<br><br>
-    Explora cómo el <b>cambio climático global</b> se relaciona con variables
-    socioeconómicas, energéticas y ambientales a lo largo del tiempo.
-    </p>
+    <div style='text-align: center;'>
+        <h1 style='font-size:2.3rem; font-weight:800; margin-bottom:0.6rem;'>🌍 Visualizador climático global del TFM</h1>
+        <p style='font-size:1.15rem; line-height:1.6em; max-width:900px; margin:auto;'>
+        Este proyecto forma parte del <b>Trabajo de Fin de Máster</b> del programa
+        <b>Máster en Big Data & Visual Analytics</b> (UNIR).<br><br>
+        Explora cómo el <b>cambio climático global</b> se relaciona con variables
+        socioeconómicas, energéticas y ambientales a lo largo del tiempo.
+        </p>
+    </div>
     """,
     unsafe_allow_html=True,
 )
