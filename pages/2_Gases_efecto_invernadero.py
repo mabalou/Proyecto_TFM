@@ -1,5 +1,5 @@
 # ==========================================
-# 2_Gases_efecto_invernadero.py — versión mejorada (UI/UX)
+# 2_Gases_efecto_invernadero.py — versión sincronizada con header
 # ==========================================
 import streamlit as st
 import pandas as pd
@@ -8,28 +8,23 @@ import plotly.express as px
 from io import BytesIO
 from sklearn.linear_model import LinearRegression
 
-# ------------------------------------------
-# CONFIGURACIÓN DE LA PÁGINA
-# ------------------------------------------
 st.set_page_config(page_title="🌍 Gases de Efecto Invernadero", layout="wide")
-
 st.title("🌍 Evolución de los Gases de Efecto Invernadero")
 
-with st.expander("📘 Acerca de esta sección", expanded=True):
+with st.expander("📘 ¿Qué muestra esta sección?", expanded=False):
     st.markdown("""
-    Esta página permite analizar la **evolución global** de los principales gases de efecto invernadero:
-    **CO₂**, **CH₄** y **N₂O**, procedentes de mediciones NOAA.
+    Esta sección permite analizar la **evolución global** de los principales gases de efecto invernadero:
+    **CO₂**, **CH₄** y **N₂O**, con datos procedentes de la **NOAA**.
 
-    🔍 **Puedes:**
-    - Visualizar series temporales interactivas (línea, área o barras).  
-    - Calcular tendencias lineales y medias por década.  
-    - Generar predicciones lineales hasta el año 2100.  
-    - Comparar la evolución de los tres gases de forma normalizada.  
-    - Exportar gráficos e información en formato **CSV**, **PNG** o **HTML interactivo**.
+    🔍 Puedes:
+    - Visualizar series temporales interactivas (línea, área o barras).
+    - Calcular tendencias lineales y medias por década.
+    - Generar predicciones lineales hasta 2100.
+    - Comparar la evolución de los tres gases normalizados.
     """)
 
 # ------------------------------------------
-# CARGA DE DATOS ROBUSTA
+# CARGA DE DATOS
 # ------------------------------------------
 @st.cache_data
 def cargar_datos_gas(ruta_csv):
@@ -55,27 +50,53 @@ RUTAS = {
 }
 
 # ------------------------------------------
-# SIDEBAR DE CONFIGURACIÓN
+# ESTADO Y FILTROS
 # ------------------------------------------
-st.sidebar.header("🔧 Personaliza la visualización")
+defaults = {
+    "ui_show_filters": False,
+    "gas": "CO₂ (ppm)",
+    "tipo_grafico": "Línea",
+    "mostrar_tendencia": True,
+    "mostrar_decadas": True,
+    "mostrar_prediccion": True,
+}
+for k, v in defaults.items():
+    st.session_state.setdefault(k, v)
 
-gas = st.sidebar.selectbox("Selecciona un gas", list(RUTAS.keys()))
-tipo_grafico = st.sidebar.selectbox("Tipo de gráfico", ["Línea", "Área", "Barras"])
+# Sincronía con el botón del header (ya gestionado por 00_Inicio)
+# Si ui_show_filters es True → se muestran los controles
+if st.session_state.ui_show_filters:
+    with st.container(border=True):
+        st.subheader("⚙️ Filtros de visualización")
 
-df_temp = cargar_datos_gas(RUTAS[gas])
-min_year, max_year = int(df_temp["Año"].min()), int(df_temp["Año"].max())
-rango = st.sidebar.slider("Selecciona el rango de años", min_year, max_year, (1980, max_year))
+        st.selectbox("Selecciona el gas", list(RUTAS.keys()), key="gas")
+        st.selectbox("Tipo de gráfico", ["Línea", "Área", "Barras"], key="tipo_grafico")
 
-mostrar_tendencia = st.sidebar.checkbox("📈 Mostrar línea de tendencia", value=True)
-mostrar_decadas = st.sidebar.checkbox("📊 Mostrar media por décadas", value=True)
-mostrar_prediccion = st.sidebar.checkbox("🔮 Incluir modelo predictivo", value=True)
+        df_temp = cargar_datos_gas(RUTAS[st.session_state.gas])
+        min_year, max_year = int(df_temp["Año"].min()), int(df_temp["Año"].max())
+        st.slider("Selecciona el rango de años", min_year, max_year, (1980, max_year), key="rango")
 
-# ------------------------------------------
-# FILTRADO Y VISUALIZACIÓN PRINCIPAL
-# ------------------------------------------
-df = df_temp.copy()
+        st.checkbox("📈 Mostrar línea de tendencia", value=st.session_state.mostrar_tendencia, key="mostrar_tendencia")
+        st.checkbox("📊 Mostrar media por décadas", value=st.session_state.mostrar_decadas, key="mostrar_decadas")
+        st.checkbox("🔮 Incluir modelo predictivo", value=st.session_state.mostrar_prediccion, key="mostrar_prediccion")
+
+# -------------------------------
+# USO DE FILTROS
+# -------------------------------
+gas = st.session_state.gas
+tipo_grafico = st.session_state.tipo_grafico
+mostrar_tendencia = st.session_state.mostrar_tendencia
+mostrar_decadas = st.session_state.mostrar_decadas
+mostrar_prediccion = st.session_state.mostrar_prediccion
+
+df = cargar_datos_gas(RUTAS[gas])
+min_year, max_year = int(df["Año"].min()), int(df["Año"].max())
+rango = st.session_state.get("rango", (1980, max_year))
 df_filtrado = df[(df["Año"] >= rango[0]) & (df["Año"] <= rango[1])]
 
+# ------------------------------------------
+# VISUALIZACIÓN PRINCIPAL
+# ------------------------------------------
 st.subheader(f"📈 Evolución global de {gas}")
 
 if df_filtrado.empty:
@@ -128,138 +149,82 @@ else:
 # ------------------------------------------
 if mostrar_decadas and not df_filtrado.empty:
     st.markdown("---")
-    st.subheader("📊 Media de concentraciones por década")
+    with st.expander("📊 Media de concentraciones por década", expanded=True):
+        df_decada = df_filtrado.copy()
+        df_decada["Década"] = ((df_decada["Año"] // 10) * 10).astype(int)
+        df_grouped = df_decada.groupby("Década")["Concentración"].mean().reset_index()
 
-    df_decada = df_filtrado.copy()
-    df_decada["Década"] = ((df_decada["Año"] // 10) * 10).astype(int)
-    df_grouped = df_decada.groupby("Década")["Concentración"].mean().reset_index()
-
-    st.dataframe(df_grouped.style.format({"Concentración": "{:.2f}"}), use_container_width=True)
-
-    fig_dec = px.bar(df_grouped, x="Década", y="Concentración",
-                     labels={"Concentración": eje_y},
-                     title=f"Concentración promedio por década ({gas})",
-                     color="Concentración", color_continuous_scale="Reds")
-    st.plotly_chart(fig_dec, use_container_width=True)
-
-    decada_max = df_grouped.loc[df_grouped["Concentración"].idxmax(), "Década"]
-    valor_max = df_grouped["Concentración"].max()
-
-    st.markdown(f"🌡️ La década con mayor concentración promedio fue **{int(decada_max)}**, con **{valor_max:.2f} {eje_y.split('(')[1]}**.")
+        st.dataframe(df_grouped.style.format({"Concentración": "{:.2f}"}), use_container_width=True)
+        fig_dec = px.bar(df_grouped, x="Década", y="Concentración",
+                         labels={"Concentración": eje_y},
+                         title=f"Concentración promedio por década ({gas})",
+                         color="Concentración", color_continuous_scale="Reds")
+        st.plotly_chart(fig_dec, use_container_width=True)
 
 # ------------------------------------------
 # MODELO PREDICTIVO (hasta 2100)
 # ------------------------------------------
 if mostrar_prediccion:
     st.markdown("---")
-    st.subheader("🔮 Predicción de concentración hasta 2100")
+    with st.expander("🔮 Proyección hasta 2100", expanded=True):
+        if not df.empty:
+            x_full = df["Año"].values.reshape(-1, 1)
+            y_full = df["Concentración"].values
+            modelo_pred = LinearRegression().fit(x_full, y_full)
+            coefg = modelo_pred.coef_[0]
 
-    if not df.empty:
-        x_full = df["Año"].values.reshape(-1, 1)
-        y_full = df["Concentración"].values
-        modelo_pred = LinearRegression().fit(x_full, y_full)
-        coefg = modelo_pred.coef_[0]
+            años_futuros = np.arange(df["Año"].max() + 1, 2101).reshape(-1, 1)
+            predicciones = modelo_pred.predict(años_futuros)
 
-        años_futuros = np.arange(df["Año"].max() + 1, 2101).reshape(-1, 1)
-        predicciones = modelo_pred.predict(años_futuros)
-
-        fig_pred = px.line(x=años_futuros.ravel(), y=predicciones,
-                           labels={"x": "Año", "y": eje_y},
-                           title=f"Predicción futura de {gas} hasta 2100")
-        st.plotly_chart(fig_pred, use_container_width=True)
-
-# ------------------------------------------
-# CONCLUSIONES AUTOMÁTICAS
-# ------------------------------------------
-if not df_filtrado.empty and 'coefg' in locals() and 'decada_max' in locals():
-    st.markdown("---")
-    st.subheader("🧩 Conclusiones automáticas")
-
-    pendiente = coefg
-    tendencia = "ascendente" if pendiente > 0 else "descendente" if pendiente < 0 else "estable"
-    frase_tend = (
-        "📈 **Aumento sostenido de las concentraciones atmosféricas.**" if pendiente > 0 else
-        "🟢 **Reducción o estabilización de los niveles globales.**" if pendiente < 0 else
-        "➖ **Sin cambios significativos detectados.**"
-    )
-
-    color_fondo = "#ffcccc" if pendiente > 0 else "#ccffcc" if pendiente < 0 else "#e6e6e6"
-    st.markdown(
-        f"""
-        <div style="background-color:{color_fondo}; color:#222; padding:15px; border-radius:12px; border:1px solid #bbb;">
-            <h4>📋 <b>Conclusión Final ({rango[0]}–{rango[1]})</b></h4>
-            <ul>
-                <li>La tendencia de <b>{gas}</b> es <b>{tendencia}</b>.</li>
-                <li>La década más concentrada fue <b>{int(decada_max)}</b> con <b>{valor_max:.2f}</b> unidades.</li>
-            </ul>
-            <p>{frase_tend}</p>
-            <p style="font-size:0.9em;">🔮 Las conclusiones se actualizan automáticamente según el rango o gas seleccionado.</p>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+            fig_pred = px.line(x=años_futuros.ravel(), y=predicciones,
+                               labels={"x": "Año", "y": eje_y},
+                               title=f"Predicción futura de {gas} hasta 2100")
+            st.plotly_chart(fig_pred, use_container_width=True)
 
 # ------------------------------------------
 # COMPARATIVA GLOBAL ENTRE GASES
 # ------------------------------------------
 st.markdown("---")
-st.subheader("🌐 Comparativa global de gases de efecto invernadero")
+with st.expander("🌐 Comparativa global de gases de efecto invernadero", expanded=True):
+    df_co2 = cargar_datos_gas(RUTAS["CO₂ (ppm)"])
+    df_ch4 = cargar_datos_gas(RUTAS["CH₄ (ppb)"])
+    df_n2o = cargar_datos_gas(RUTAS["N₂O (ppb)"])
 
-df_co2 = cargar_datos_gas(RUTAS["CO₂ (ppm)"])
-df_ch4 = cargar_datos_gas(RUTAS["CH₄ (ppb)"])
-df_n2o = cargar_datos_gas(RUTAS["N₂O (ppb)"])
+    df_comp = (
+        df_co2[["Año", "Concentración"]].rename(columns={"Concentración": "CO₂"})
+        .merge(df_ch4[["Año", "Concentración"]].rename(columns={"Concentración": "CH₄"}), on="Año", how="inner")
+        .merge(df_n2o[["Año", "Concentración"]].rename(columns={"Concentración": "N₂O"}), on="Año", how="inner")
+    ).dropna()
 
-df_comp = (
-    df_co2[["Año", "Concentración"]].rename(columns={"Concentración": "CO₂"})
-    .merge(df_ch4[["Año", "Concentración"]].rename(columns={"Concentración": "CH₄"}), on="Año", how="inner")
-    .merge(df_n2o[["Año", "Concentración"]].rename(columns={"Concentración": "N₂O"}), on="Año", how="inner")
-).dropna()
+    for g in ["CO₂", "CH₄", "N₂O"]:
+        df_comp[g] = (df_comp[g] - df_comp[g].min()) / (df_comp[g].max() - df_comp[g].min())
 
-# Normalización 0–1
-for g in ["CO₂", "CH₄", "N₂O"]:
-    df_comp[g] = (df_comp[g] - df_comp[g].min()) / (df_comp[g].max() - df_comp[g].min())
-
-df_melt = df_comp.melt(id_vars="Año", var_name="Gas", value_name="Concentración Normalizada")
-
-fig_comp = px.line(df_melt, x="Año", y="Concentración Normalizada", color="Gas",
-                   title="Comparativa normalizada de CO₂, CH₄ y N₂O (0–1)",
-                   labels={"Concentración Normalizada": "Proporción relativa"})
-st.plotly_chart(fig_comp, use_container_width=True)
-
-# Determinar el gas con mayor crecimiento relativo
-pendientes = {}
-for g in ["CO₂", "CH₄", "N₂O"]:
-    modelo_temp = LinearRegression().fit(df_comp[["Año"]], df_comp[g])
-    pendientes[g] = modelo_temp.coef_[0]
-
-gas_mas_rapido = max(pendientes, key=pendientes.get)
-st.info(f"🚀 El gas con mayor tasa de crecimiento relativo es **{gas_mas_rapido}**, reflejando su impacto creciente en el cambio climático.")
+    df_melt = df_comp.melt(id_vars="Año", var_name="Gas", value_name="Concentración Normalizada")
+    fig_comp = px.line(df_melt, x="Año", y="Concentración Normalizada", color="Gas",
+                       title="Comparativa normalizada de CO₂, CH₄ y N₂O (0–1)",
+                       labels={"Concentración Normalizada": "Proporción relativa"})
+    st.plotly_chart(fig_comp, use_container_width=True)
 
 # ------------------------------------------
-# EXPORTACIÓN DE DATOS Y GRÁFICOS
+# EXPORTACIÓN
 # ------------------------------------------
 st.markdown("---")
 st.subheader("💾 Exportar datos y gráficos")
-
 col1, col2 = st.columns(2)
-
 with col1:
     try:
         csv = df_filtrado.to_csv(index=False).encode("utf-8")
-        st.download_button("📄 Descargar CSV", data=csv,
-                           file_name="gases_filtrados.csv", mime="text/csv")
+        st.download_button("📄 Descargar CSV", data=csv, file_name="gases_filtrados.csv", mime="text/csv")
     except Exception as e:
         st.error(f"No se pudo generar el CSV: {e}")
-
 with col2:
     try:
         import plotly.io as pio
         buffer = BytesIO()
         fig.write_image(buffer, format="png")
-        st.download_button("🖼️ Descargar gráfico (PNG)", data=buffer,
-                           file_name="grafico_gases.png", mime="image/png")
+        st.download_button("🖼️ Descargar gráfico (PNG)", data=buffer, file_name="grafico_gases.png", mime="image/png")
     except Exception:
         st.warning("⚠️ No se pudo generar la imagen (Kaleido no disponible). Descarga el HTML interactivo:")
         html_bytes = fig.to_html().encode("utf-8")
-        st.download_button("🌐 Descargar gráfico (HTML interactivo)",
-                           data=html_bytes, file_name="grafico_interactivo.html", mime="text/html")
+        st.download_button("🌐 Descargar gráfico (HTML interactivo)", data=html_bytes,
+                           file_name="grafico_interactivo.html", mime="text/html")

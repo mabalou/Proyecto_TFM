@@ -1,5 +1,5 @@
 # ==========================================
-# 4_Hielo_marino.py — versión mejorada (UI/UX)
+# 4_Hielo_marino.py — versión sincronizada con header
 # ==========================================
 import streamlit as st
 import pandas as pd
@@ -14,7 +14,7 @@ from sklearn.linear_model import LinearRegression
 st.set_page_config(page_title="🧊 Hielo marino", layout="wide")
 st.title("🧊 Evolución del hielo marino global")
 
-with st.expander("📘 Acerca de esta sección", expanded=True):
+with st.expander("📘 ¿Qué muestra esta sección?", expanded=False):
     st.markdown("""
     Analiza la evolución de la **extensión del hielo marino** en el **Ártico** y el **Antártico** (1978–presente).
 
@@ -24,8 +24,6 @@ with st.expander("📘 Acerca de esta sección", expanded=True):
     - Promedios por décadas.  
     - Comparativa entre regiones y conclusiones automáticas.  
     - Descarga de datos y gráficos.  
-
-    ⚙️ Personaliza la región, tipo de gráfico y rango temporal desde la barra lateral.
     """)
 
 # ------------------------------------------
@@ -57,18 +55,36 @@ def cargar_datos_ambos():
     return pd.concat([artico, antartico], ignore_index=True)
 
 # ------------------------------------------
-# SIDEBAR
+# ESTADO Y FILTROS (sin sidebar)
 # ------------------------------------------
-st.sidebar.header("🔧 Personaliza la visualización")
+defaults = {
+    "ui_show_filters": False,
+    "region": "Ártico",
+    "tipo_grafico": "Línea",
+    "rango": (1980, 2024),
+    "mostrar_tendencia": True,
+    "mostrar_decadas": True,
+    "comparar_regiones": True,
+}
+for k, v in defaults.items():
+    st.session_state.setdefault(k, v)
 
-region = st.sidebar.selectbox("🌍 Región", ["Ártico", "Antártico"])
-tipo_grafico = st.sidebar.selectbox("Tipo de gráfico", ["Línea", "Área", "Barras"])
-min_year, max_year = 1978, 2024
-rango = st.sidebar.slider("Rango de años", min_year, max_year, (1980, max_year))
+if st.session_state.ui_show_filters:
+    with st.container(border=True):
+        st.subheader("⚙️ Filtros de visualización")
+        st.selectbox("🌍 Región", ["Ártico", "Antártico"], key="region")
+        st.selectbox("Tipo de gráfico", ["Línea", "Área", "Barras"], key="tipo_grafico")
+        st.slider("Rango de años", 1978, 2024, st.session_state.rango, key="rango")
+        st.checkbox("📈 Mostrar línea de tendencia", value=st.session_state.mostrar_tendencia, key="mostrar_tendencia")
+        st.checkbox("📊 Mostrar media por décadas", value=st.session_state.mostrar_decadas, key="mostrar_decadas")
+        st.checkbox("🌐 Comparar ambas regiones", value=st.session_state.comparar_regiones, key="comparar_regiones")
 
-mostrar_tendencia = st.sidebar.checkbox("📈 Mostrar línea de tendencia", value=True)
-mostrar_decadas = st.sidebar.checkbox("📊 Mostrar media por décadas", value=True)
-comparar_regiones = st.sidebar.checkbox("🌐 Comparar ambas regiones", value=True)
+region = st.session_state.region
+tipo_grafico = st.session_state.tipo_grafico
+rango = st.session_state.rango
+mostrar_tendencia = st.session_state.mostrar_tendencia
+mostrar_decadas = st.session_state.mostrar_decadas
+comparar_regiones = st.session_state.comparar_regiones
 
 # ------------------------------------------
 # CARGA Y FILTRADO
@@ -113,7 +129,6 @@ else:
 # ------------------------------------------
 # RESUMEN AUTOMÁTICO
 # ------------------------------------------
-st.markdown("---")
 st.subheader("🧾 Resumen automático del análisis")
 
 if not df_filtrado.empty:
@@ -133,47 +148,31 @@ else:
 # ------------------------------------------
 if mostrar_decadas and not df_filtrado.empty:
     st.markdown("---")
-    st.subheader("📊 Media de extensión por década")
+    with st.expander("📊 Media de extensión por década", expanded=True):
+        df_decada = df_filtrado.copy()
+        df_decada["Década"] = (df_decada["Año"] // 10) * 10
+        df_grouped = df_decada.groupby("Década")["Extensión"].mean().reset_index()
 
-    df_decada = df_filtrado.copy()
-    df_decada["Década"] = (df_decada["Año"] // 10) * 10
-    df_grouped = df_decada.groupby("Década")["Extensión"].mean().reset_index()
-
-    st.dataframe(df_grouped.style.format({"Extensión": "{:.2f}"}), use_container_width=True)
-    fig_dec = px.bar(df_grouped, x="Década", y="Extensión", color="Extensión",
-                     color_continuous_scale="Blues",
-                     labels={"Extensión": "Extensión promedio (millones km²)"},
-                     title=f"Media por década ({region})")
-    st.plotly_chart(fig_dec, use_container_width=True)
-
-    decada_min = int(df_grouped.loc[df_grouped["Extensión"].idxmin(), "Década"])
-    valor_min = df_grouped["Extensión"].min()
-    st.markdown(f"❄️ La menor extensión promedio se registró en la década de **{decada_min}**, con **{valor_min:.2f} millones km²**.")
+        st.dataframe(df_grouped.style.format({"Extensión": "{:.2f}"}), use_container_width=True)
+        fig_dec = px.bar(df_grouped, x="Década", y="Extensión", color="Extensión",
+                         color_continuous_scale="Blues",
+                         labels={"Extensión": "Extensión promedio (millones km²)"},
+                         title=f"Media por década ({region})")
+        st.plotly_chart(fig_dec, use_container_width=True)
 
 # ------------------------------------------
 # COMPARATIVA ENTRE REGIONES
 # ------------------------------------------
 if comparar_regiones:
     st.markdown("---")
-    st.subheader("🌐 Comparativa entre regiones polares")
+    with st.expander("🌐 Comparativa entre regiones polares", expanded=True):
+        df_comp = cargar_datos_ambos()
+        df_comp = df_comp[(df_comp["Año"] >= rango[0]) & (df_comp["Año"] <= rango[1])]
 
-    df_comp = cargar_datos_ambos()
-    df_comp = df_comp[(df_comp["Año"] >= rango[0]) & (df_comp["Año"] <= rango[1])]
-
-    fig_comp = px.line(df_comp, x="Año", y="Extensión", color="Región",
-                       title="Comparativa de extensión del hielo marino (Ártico vs Antártico)",
-                       labels={"Extensión": "Extensión (millones km²)", "Año": "Año"})
-    st.plotly_chart(fig_comp, use_container_width=True)
-
-    artico_media = df_comp[df_comp["Región"] == "Ártico"]["Extensión"].mean()
-    antartico_media = df_comp[df_comp["Región"] == "Antártico"]["Extensión"].mean()
-    diferencia = artico_media - antartico_media
-
-    st.markdown(
-        f"📊 En promedio durante el periodo seleccionado, la extensión del **Ártico** fue de `{artico_media:.2f}` millones km² "
-        f"y la del **Antártico** de `{antartico_media:.2f}` millones km² "
-        f"({('mayor' if diferencia > 0 else 'menor')} diferencia de `{abs(diferencia):.2f}` millones km²)."
-    )
+        fig_comp = px.line(df_comp, x="Año", y="Extensión", color="Región",
+                           title="Comparativa de extensión del hielo marino (Ártico vs Antártico)",
+                           labels={"Extensión": "Extensión (millones km²)", "Año": "Año"})
+        st.plotly_chart(fig_comp, use_container_width=True)
 
 # ------------------------------------------
 # CONCLUSIONES AUTOMÁTICAS

@@ -1,5 +1,5 @@
 # ==========================================
-# 3_Nivel_del_mar.py — versión mejorada (UI/UX)
+# 3_Nivel_del_mar.py — versión sincronizada con header
 # ==========================================
 import streamlit as st
 import pandas as pd
@@ -15,7 +15,7 @@ st.set_page_config(page_title="🌊 Nivel del mar global", layout="wide")
 
 st.title("🌊 Evolución del nivel medio global del mar")
 
-with st.expander("📘 Acerca de esta sección", expanded=True):
+with st.expander("📘 ¿Qué muestra esta sección?", expanded=False):
     st.markdown("""
     Analiza la evolución mensual del **nivel medio global del mar**, con datos satelitales de la **NOAA / NASA**.
 
@@ -24,47 +24,60 @@ with st.expander("📘 Acerca de esta sección", expanded=True):
     - Cálculo de tendencias lineales y medias por década.  
     - Proyecciones hasta el año 2100 mediante regresión lineal.  
     - Conclusiones automáticas y descarga de resultados.
-
-    ⚙️ Usa la barra lateral para ajustar el rango de años y las opciones de visualización.
     """)
 
 # ------------------------------------------
-# CARGA DE DATOS ROBUSTA
+# CARGA DE DATOS
 # ------------------------------------------
 @st.cache_data
 def cargar_datos():
     df = pd.read_csv("data/sea_level/sea_level_nasa.csv", skiprows=1, header=None, names=["Fecha", "Nivel_mar"])
     df["Fecha"] = pd.to_datetime(df["Fecha"], errors="coerce")
     df = df.dropna(subset=["Fecha", "Nivel_mar"])
-    df = df[df["Nivel_mar"].between(-100, 100)]  # eliminar valores extremos
-    df = df[df["Nivel_mar"] != -999]  # eliminar códigos de error
+    df = df[df["Nivel_mar"].between(-100, 100)]
+    df = df[df["Nivel_mar"] != -999]
     df["Año"] = df["Fecha"].dt.year
     df["Mes"] = df["Fecha"].dt.month
     return df
 
 df = cargar_datos()
-
-# ------------------------------------------
-# SIDEBAR
-# ------------------------------------------
-st.sidebar.header("🔧 Personaliza la visualización")
-
-tipo_grafico = st.sidebar.selectbox("Tipo de gráfico", ["Línea", "Área", "Barras"])
 min_year, max_year = int(df["Año"].min()), int(df["Año"].max())
-rango = st.sidebar.slider("Selecciona el rango de años", min_year, max_year, (1993, max_year))
-mostrar_tendencia = st.sidebar.checkbox("📈 Mostrar línea de tendencia", value=True)
-mostrar_decadas = st.sidebar.checkbox("📊 Mostrar media por décadas", value=True)
-mostrar_prediccion = st.sidebar.checkbox("🔮 Incluir modelo predictivo", value=True)
 
 # ------------------------------------------
-# FILTRADO DE DATOS
+# ESTADO Y FILTROS (sin sidebar)
 # ------------------------------------------
+defaults = {
+    "ui_show_filters": False,
+    "tipo_grafico": "Línea",
+    "rango": (1993, max_year),
+    "mostrar_tendencia": True,
+    "mostrar_decadas": True,
+    "mostrar_prediccion": True,
+}
+for k, v in defaults.items():
+    st.session_state.setdefault(k, v)
+
+if st.session_state.ui_show_filters:
+    with st.container(border=True):
+        st.subheader("⚙️ Filtros de visualización")
+        st.selectbox("Tipo de gráfico", ["Línea", "Área", "Barras"], key="tipo_grafico")
+        st.slider("Selecciona el rango de años", min_year, max_year, st.session_state.rango, key="rango")
+        st.checkbox("📈 Mostrar línea de tendencia", value=st.session_state.mostrar_tendencia, key="mostrar_tendencia")
+        st.checkbox("📊 Mostrar media por décadas", value=st.session_state.mostrar_decadas, key="mostrar_decadas")
+        st.checkbox("🔮 Incluir modelo predictivo", value=st.session_state.mostrar_prediccion, key="mostrar_prediccion")
+
+tipo_grafico = st.session_state.tipo_grafico
+rango = st.session_state.rango
+mostrar_tendencia = st.session_state.mostrar_tendencia
+mostrar_decadas = st.session_state.mostrar_decadas
+mostrar_prediccion = st.session_state.mostrar_prediccion
+
 df_filtrado = df[(df["Año"] >= rango[0]) & (df["Año"] <= rango[1])]
 
 # ------------------------------------------
 # VISUALIZACIÓN PRINCIPAL
 # ------------------------------------------
-st.subheader("📈 Evolución temporal")
+st.subheader("📈 Evolución temporal del nivel del mar")
 
 if df_filtrado.empty:
     st.info("Selecciona un rango de años válido para visualizar los datos.")
@@ -86,7 +99,7 @@ else:
         y = df_filtrado["Nivel_mar"].values
         modelo = LinearRegression().fit(x, y)
         y_pred = modelo.predict(x)
-        pendiente = modelo.coef_[0] * 365.25  # mm/año
+        pendiente = modelo.coef_[0] * 365.25
         fig.add_scatter(x=df_filtrado["Fecha"], y=y_pred, mode="lines",
                         name="Tendencia", line=dict(color="red", dash="dash", width=2))
 
@@ -95,7 +108,6 @@ else:
 # ------------------------------------------
 # RESUMEN AUTOMÁTICO
 # ------------------------------------------
-st.markdown("---")
 st.subheader("🧾 Resumen automático del análisis")
 
 if not df_filtrado.empty:
@@ -121,51 +133,45 @@ else:
 # ------------------------------------------
 if mostrar_decadas and not df_filtrado.empty:
     st.markdown("---")
-    st.subheader("📊 Nivel medio del mar por década")
+    with st.expander("📊 Nivel medio del mar por década", expanded=True):
+        df_dec = df_filtrado.copy()
+        df_dec["Década"] = (df_dec["Año"] // 10) * 10
+        df_grouped = df_dec.groupby("Década")["Nivel_mar"].mean().reset_index()
 
-    df_dec = df_filtrado.copy()
-    df_dec["Década"] = (df_dec["Año"] // 10) * 10
-    df_grouped = df_dec.groupby("Década")["Nivel_mar"].mean().reset_index()
+        st.dataframe(df_grouped.style.format({"Nivel_mar": "{:.2f}"}), use_container_width=True)
 
-    st.dataframe(df_grouped.style.format({"Nivel_mar": "{:.2f}"}), use_container_width=True)
-
-    fig_dec = px.bar(df_grouped, x="Década", y="Nivel_mar", color="Nivel_mar",
-                     color_continuous_scale="Blues",
-                     labels={"Nivel_mar": "Nivel medio (mm)"},
-                     title="Nivel medio del mar por década")
-    st.plotly_chart(fig_dec, use_container_width=True)
-
-    decada_max = int(df_grouped.loc[df_grouped["Nivel_mar"].idxmax(), "Década"])
-    valor_max = df_grouped["Nivel_mar"].max()
-    st.markdown(f"🌍 La década con mayor nivel medio del mar fue **{decada_max}**, con **{valor_max:.2f} mm**.")
+        fig_dec = px.bar(df_grouped, x="Década", y="Nivel_mar", color="Nivel_mar",
+                         color_continuous_scale="Blues",
+                         labels={"Nivel_mar": "Nivel medio (mm)"},
+                         title="Nivel medio del mar por década")
+        st.plotly_chart(fig_dec, use_container_width=True)
 
 # ------------------------------------------
 # MODELO PREDICTIVO
 # ------------------------------------------
 if mostrar_prediccion and not df.empty:
     st.markdown("---")
-    st.subheader("🔮 Proyección del nivel del mar hasta 2100")
+    with st.expander("🔮 Proyección del nivel del mar hasta 2100", expanded=True):
+        x_all = df["Fecha"].map(pd.Timestamp.toordinal).values.reshape(-1, 1)
+        y_all = df["Nivel_mar"].values
+        modelo_pred = LinearRegression().fit(x_all, y_all)
+        coefg = modelo_pred.coef_[0] * 365.25
 
-    x_all = df["Fecha"].map(pd.Timestamp.toordinal).values.reshape(-1, 1)
-    y_all = df["Nivel_mar"].values
-    modelo_pred = LinearRegression().fit(x_all, y_all)
-    coefg = modelo_pred.coef_[0] * 365.25
+        fechas_futuras = pd.date_range(start=df["Fecha"].max(), end="2100-12-01", freq="MS")
+        x_future = fechas_futuras.map(pd.Timestamp.toordinal).values.reshape(-1, 1)
+        y_future = modelo_pred.predict(x_future)
 
-    fechas_futuras = pd.date_range(start=df["Fecha"].max(), end="2100-12-01", freq="MS")
-    x_future = fechas_futuras.map(pd.Timestamp.toordinal).values.reshape(-1, 1)
-    y_future = modelo_pred.predict(x_future)
+        fig_pred = px.line(x=fechas_futuras, y=y_future,
+                           labels={"x": "Fecha", "y": "Nivel del mar (mm)"},
+                           title="Proyección del nivel medio global del mar hasta 2100")
+        st.plotly_chart(fig_pred, use_container_width=True)
 
-    fig_pred = px.line(x=fechas_futuras, y=y_future,
-                       labels={"x": "Fecha", "y": "Nivel del mar (mm)"},
-                       title="Proyección del nivel medio global del mar hasta 2100")
-    st.plotly_chart(fig_pred, use_container_width=True)
-
-    if coefg > 0:
-        st.markdown("🌡️ **El modelo predice un incremento continuo del nivel del mar hacia finales de siglo.**")
-    elif coefg < 0:
-        st.markdown("🟢 **El modelo indica una ligera tendencia descendente (inusual).**")
-    else:
-        st.markdown("➖ **El modelo no muestra una variación significativa.**")
+        if coefg > 0:
+            st.markdown("🌡️ **El modelo predice un incremento continuo del nivel del mar hacia finales de siglo.**")
+        elif coefg < 0:
+            st.markdown("🟢 **El modelo indica una ligera tendencia descendente (inusual).**")
+        else:
+            st.markdown("➖ **El modelo no muestra una variación significativa.**")
 
 # ------------------------------------------
 # CONCLUSIONES AUTOMÁTICAS
@@ -198,13 +204,11 @@ if not df_filtrado.empty and 'coefg' in locals():
     )
 
 # ------------------------------------------
-# DESCARGAS SEGURAS
+# DESCARGAS
 # ------------------------------------------
 st.markdown("---")
 st.subheader("💾 Exportar datos y gráficos")
-
 col1, col2 = st.columns(2)
-
 with col1:
     try:
         csv = df_filtrado.to_csv(index=False).encode("utf-8")
@@ -212,7 +216,6 @@ with col1:
                            file_name="nivel_mar_filtrado.csv", mime="text/csv")
     except Exception as e:
         st.error(f"No se pudo generar el CSV: {e}")
-
 with col2:
     try:
         import plotly.io as pio

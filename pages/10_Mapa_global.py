@@ -1,5 +1,6 @@
 # ==========================================
-# 10_Mapa_global.py — Mapa climático global interactivo
+# 10_Mapa_global.py — Mapa climático global PRO (con filtros avanzados)
+# Compatible con el botón de Filtros del header (st.session_state.ui_show_filters)
 # ==========================================
 import streamlit as st
 import pandas as pd
@@ -7,15 +8,14 @@ import numpy as np
 import plotly.express as px
 
 st.set_page_config(page_title="🗺️ Mapa climático global", layout="wide")
-st.title("🌍 Mapa climático global interactivo")
+st.title("🗺️ Mapa climático global interactivo")
+
 with st.expander("ℹ️ ¿Qué muestra esta página?"):
     st.markdown("""
-**Visualiza la evolución espacial** de indicadores de clima y variables socioeconómicas por país.
-- Arriba a la izquierda elige la **variable** (CO₂ total / per cápita / PIB / PIB per cápita / Población).
-- A la derecha selecciona el **año** con el **slider manual**. Si marcas **“🎞️ Animar por años”**,
-  verás la evolución automática.
-- Debajo aparece un **Top-10** de países (solo países reales, sin agregados como *World* o *High income*).
-- Al final verás la **tendencia temporal** del **Top-5** del año seleccionado.
+**Explora mapas y tendencias** de indicadores de clima y variables socioeconómicas por país,
+y concentraciones globales de gases.  
+Usa el **botón de Filtros de la cabecera** para personalizar: variable, año, países, animación,
+escala logarítmica y más.
 """)
 
 # -------------------------------
@@ -30,7 +30,6 @@ AGG_PATTERNS = [
     "small states", "pacific island", "post-demographic",
     "pre-demographic", "early-demographic", "late-demographic"
 ]
-
 def es_pais_real(name: str) -> bool:
     if not isinstance(name, str) or not name.strip():
         return False
@@ -45,7 +44,10 @@ def _safe_read_csv(path, **kwargs):
         try:
             return pd.read_csv(path, engine="python", **kwargs)
         except Exception:
-            return pd.read_csv(path, engine="python", comment="#", **kwargs)
+            try:
+                return pd.read_csv(path, engine="python", comment="#", **kwargs)
+            except Exception:
+                return pd.DataFrame()
 
 def _normaliza(df: pd.DataFrame, country_key=("country name","country"), year_key="year", value_key="value"):
     """Devuelve DataFrame con columnas: Country, Year, Value"""
@@ -55,16 +57,22 @@ def _normaliza(df: pd.DataFrame, country_key=("country name","country"), year_ke
     # país
     ccol = None
     for k in country_key:
-        if k in cols: ccol = cols[k]; break
+        if k in cols:
+            ccol = cols[k]
+            break
     # año
     ycol = cols.get(year_key, None)
     # valor
     vcol = cols.get(value_key, None)
-    if ccol is None or ycol is None or vcol is None:
-        # si el CSV ya viene con nombres “bonitos”
-        ccol = cols.get("country", ccol)
-        ycol = cols.get("year", ycol)
-        vcol = cols.get("value", vcol)
+    # fallback por si ya vienen "bonitos"
+    if ccol is None:
+        ccol = cols.get("country", None)
+    if ycol is None:
+        ycol = cols.get("year", None)
+    if vcol is None:
+        vcol = cols.get("value", None)
+    if any(v is None for v in (ccol, ycol, vcol)):
+        return pd.DataFrame(columns=["Country","Year","Value"])
     out = df.rename(columns={ccol:"Country", ycol:"Year", vcol:"Value"})[["Country","Year","Value"]]
     out["Year"] = pd.to_numeric(out["Year"], errors="coerce")
     out["Value"] = pd.to_numeric(out["Value"], errors="coerce")
@@ -77,184 +85,318 @@ def _normaliza(df: pd.DataFrame, country_key=("country name","country"), year_ke
 # Carga de datos (según tus CSV)
 # -------------------------------
 @st.cache_data
-def load_all():
-    # CO2 total
-    co2 = _safe_read_csv("data/socioeconomico/co2_emissions_by_country.csv")
-    co2.columns = co2.columns.str.strip().str.lower()
-    co2_total = _normaliza(co2.rename(columns={"co2":"value"}) if "co2" in co2.columns else co2)
-
-    # CO2 per cápita (si existe)
-    co2_pc = pd.DataFrame(columns=["Country","Year","Value"])
-    for cand in ["co2_per_capita_t","co2_per_capita","co2_pc"]:
-        if cand in co2.columns:
-            co2_pc = _normaliza(co2.rename(columns={cand:"value"}))
-            break
-
-    # Intensidad CO2 por 1k USD (si existe)
-    co2_int = pd.DataFrame(columns=["Country","Year","Value"])
-    for cand in ["co2_intensity_t_per_1k_usd","co2_intensity", "co2_per_gdp"]:
-        if cand in co2.columns:
-            co2_int = _normaliza(co2.rename(columns={cand:"value"}))
-            break
+def load_all_sources():
+    # CO2 por país (total y per cápita si existe)
+    co2c_raw = _safe_read_csv("data/socioeconomico/co2_emissions_by_country.csv")
+    co2c = pd.DataFrame(columns=["Country","Year","Value"])
+    co2c_pc = pd.DataFrame(columns=["Country","Year","Value"])
+    if not co2c_raw.empty:
+        co2c_raw.columns = co2c_raw.columns.str.strip().str.lower()
+        # total
+        if "co2" in co2c_raw.columns:
+            co2c = _normaliza(co2c_raw.rename(columns={"co2":"value"}))
+        elif "value" in co2c_raw.columns:
+            co2c = _normaliza(co2c_raw)
+        # per cápita si existe
+        for cand in ["co2_per_capita", "co2_per_capita_t", "co2_pc"]:
+            if cand in co2c_raw.columns:
+                co2c_pc = _normaliza(co2c_raw.rename(columns={cand:"value"}))
+                break
 
     # PIB
-    gdp = _safe_read_csv("data/socioeconomico/gdp_by_country.csv")
-    gdp.columns = gdp.columns.str.strip().str.lower()
-    gdp_total = _normaliza(gdp)  # value ya suele ser el PIB total en USD
+    gdp_raw = _safe_read_csv("data/socioeconomico/gdp_by_country.csv")
+    gdp = pd.DataFrame(columns=["Country","Year","Value"])
     gdp_pc = pd.DataFrame(columns=["Country","Year","Value"])
-    for cand in ["gdp_per_capita_usd","gdp_per_capita"]:
-        if cand in gdp.columns:
-            gdp_pc = _normaliza(gdp.rename(columns={cand:"value"}))
-            break
+    if not gdp_raw.empty:
+        gdp_raw.columns = gdp_raw.columns.str.strip().str.lower()
+        gdp = _normaliza(gdp_raw)  # suele venir 'value' como PIB total
+        for cand in ["gdp_per_capita_usd","gdp_per_capita"]:
+            if cand in gdp_raw.columns:
+                gdp_pc = _normaliza(gdp_raw.rename(columns={cand:"value"}))
+                break
 
     # Población
-    pop = _safe_read_csv("data/socioeconomico/population_by_country.csv")
-    pop.columns = pop.columns.str.strip().str.lower()
-    pop_df = _normaliza(pop)
+    pop_raw = _safe_read_csv("data/socioeconomico/population_by_country.csv")
+    pop = pd.DataFrame(columns=["Country","Year","Value"])
+    if not pop_raw.empty:
+        pop_raw.columns = pop_raw.columns.str.strip().str.lower()
+        pop = _normaliza(pop_raw)
 
-    # Un diccionario con lo disponible (solo añadimos si no está vacío)
+    # Gases globales (concentraciones)
+    def _load_gas(path, label):
+        df = _safe_read_csv(path, comment="#")
+        if df.empty:
+            return pd.DataFrame(columns=["Year","Value"])
+        df.columns = df.columns.str.strip().str.lower()
+        if "year" not in df.columns:
+            return pd.DataFrame(columns=["Year","Value"])
+        val_col = None
+        for cand in ["average", "trend", "value"]:
+            if cand in df.columns:
+                val_col = cand
+                break
+        if val_col is None:
+            return pd.DataFrame(columns=["Year","Value"])
+        aux = df.rename(columns={"year":"Year", val_col:"Value"})[["Year","Value"]]
+        aux["Year"] = pd.to_numeric(aux["Year"], errors="coerce")
+        aux["Value"] = pd.to_numeric(aux["Value"], errors="coerce")
+        aux = aux.dropna()
+        aux["Label"] = label
+        return aux
+
+    co2_g = _load_gas("data/gases/greenhouse_gas_co2_global.csv", "CO₂ (ppm)")
+    ch4_g = _load_gas("data/gases/greenhouse_gas_ch4_global.csv", "CH₄ (ppb)")
+    n2o_g = _load_gas("data/gases/greenhouse_gas_n2o_global.csv", "N₂O (ppb)")
+
+    # Construir catálogo de variables disponibles
     variables = {}
-    if not co2_total.empty: variables["CO₂ total (Mt)"] = co2_total
-    if not co2_pc.empty:    variables["CO₂ per cápita (t)"] = co2_pc
-    if not co2_int.empty:   variables["Intensidad CO₂ (t / 1k USD)"] = co2_int
-    if not gdp_total.empty: variables["PIB (USD)"] = gdp_total
-    if not gdp_pc.empty:    variables["PIB per cápita (USD)"] = gdp_pc
-    if not pop_df.empty:    variables["Población"] = pop_df
+    if not co2c.empty:    variables["CO₂ (socioeconómico, Mt) por país"] = co2c
+    if not co2c_pc.empty: variables["CO₂ per cápita (t) por país"] = co2c_pc
+    if not gdp.empty:     variables["PIB (USD) por país"] = gdp
+    if not gdp_pc.empty:  variables["PIB per cápita (USD) por país"] = gdp_pc
+    if not pop.empty:     variables["Población por país"] = pop
 
-    # min/max años globales
+    gases_globales = pd.concat([co2_g, ch4_g, n2o_g], ignore_index=True)
+    # Rango años global para los selectores
+    min_year = 1960
+    max_year = 2024
+    years = []
     if variables:
-        miny = int(min(v["Year"].min() for v in variables.values()))
-        maxy = int(max(v["Year"].max() for v in variables.values()))
-    else:
-        miny, maxy = 1960, 2022
+        years += [int(v["Year"].min()) for v in variables.values() if not v.empty]
+        years += [int(v["Year"].max()) for v in variables.values() if not v.empty]
+    if not gases_globales.empty:
+        years += [int(gases_globales["Year"].min()), int(gases_globales["Year"].max())]
+    if years:
+        min_year, max_year = min(years), max(years)
 
-    return variables, (miny, maxy)
+    return variables, gases_globales, (min_year, max_year)
 
-variables, (min_year, max_year) = load_all()
-if not variables:
-    st.error("No se han podido cargar variables desde los CSV. Revisa las rutas y columnas.")
+variables, gases_globales, (min_year, max_year) = load_all_sources()
+if not variables and gases_globales.empty:
+    st.error("No se han podido cargar datos. Revisa las rutas y columnas de los CSV.")
     st.stop()
 
 # -------------------------------
-# Sidebar de control
+# Estado inicial y Filtros (integrado con el header)
 # -------------------------------
-st.sidebar.header("🎛️ Controles")
-var_name = st.sidebar.selectbox("Variable a visualizar", options=list(variables.keys()))
-animar = st.sidebar.checkbox("🎞️ Animar por años", value=False)
+# Defaults robustos
+defaults = {
+    "map_var": next(iter(variables.keys())) if variables else "CO₂ (ppm) — global",
+    "year": max_year,
+    "animate": False,
+    "use_log": False,
+    "countries_sel": [],
+    "show_global_series": False,  # para gases globales
+}
+for k, v in defaults.items():
+    st.session_state.setdefault(k, v)
 
-year = st.sidebar.slider("Año", min_value=min_year, max_value=max_year, value=min(max_year, max_year))
-dfv = variables[var_name]
+# Panel de filtros SOLO si el toggle global está activo (desde el header)
+if st.session_state.get("ui_show_filters", False):
+    with st.container(border=True):
+        st.subheader("🎛️ Filtros")
+        c1, c2 = st.columns([2,1])
 
-# -------------------------------
-# Mapa
-# -------------------------------
-st.subheader(f"{var_name} por país")
-fmt = ",.2f" if "USD" in var_name or "CO₂" in var_name else ",.0f"
+        with c1:
+            opciones = list(variables.keys())
+            if not gases_globales.empty:
+                opciones = ["— GASES GLOBALES —", "CO₂ (ppm) — global", "CH₄ (ppb) — global", "N₂O (ppb) — global", "— POR PAÍS —"] + opciones
+            map_var = st.selectbox("Variable a visualizar", options=opciones, index=opciones.index(st.session_state.map_var) if st.session_state.map_var in opciones else 0, key="map_var")
 
-if animar:
-    # Animación año a año
-    mdf = dfv.copy()
-    fig_map = px.choropleth(
-        mdf, locations="Country", locationmode="country names",
-        color="Value", hover_name="Country", animation_frame="Year",
-        color_continuous_scale="Viridis",
-        labels={"Value": var_name},
-        title=None
-    )
+        with c2:
+            animate = st.checkbox("🎞️ Animar por años", value=st.session_state.animate, key="animate")
+            use_log = st.checkbox("🧮 Escala logarítmica", value=st.session_state.use_log, key="use_log")
+
+        # Si la variable es "por país", mostramos selector de países
+        es_global = isinstance(st.session_state.map_var, str) and ("— global" in st.session_state.map_var or "— GASES GLOBALES —" in st.session_state.map_var)
+        if not es_global:
+            # candidatos de países de la variable elegida
+            dfv = variables.get(st.session_state.map_var, pd.DataFrame(columns=["Country","Year","Value"]))
+            paises = sorted(dfv["Country"].unique().tolist()) if not dfv.empty else []
+            st.session_state.countries_sel = st.multiselect("Filtrar países (opcional)", paises, default=st.session_state.countries_sel)
+
+        # Slider de año
+        year = st.slider("Año", min_value=min_year, max_value=max_year, value=min(max_year, max_year), key="year")
 else:
-    mdf = dfv[dfv["Year"] == year].copy()
-    fig_map = px.choropleth(
-        mdf, locations="Country", locationmode="country names",
-        color="Value", hover_name="Country",
-        color_continuous_scale="Viridis",
-        labels={"Value": var_name},
-        title=None
-    )
-
-fig_map.update_layout(margin=dict(l=0, r=0, t=0, b=0))
-fig_map.update_traces(hovertemplate="<b>%{hovertext}</b><br>" + var_name + ": %{z:," + (".2f" if fmt==",.2f" else ".0f") + "}")
-st.plotly_chart(fig_map, use_container_width=True)
+    # Garantiza consistencia interna aunque no se muestren filtros
+    map_var = st.session_state.map_var
+    animate = st.session_state.animate
+    use_log = st.session_state.use_log
+    year = st.session_state.year
 
 # -------------------------------
-# 🏆 Top-10 países (año seleccionado)
+# LÓGICA: Global vs Por País
 # -------------------------------
-st.subheader(f"🏆 Top 10 países — {year}")
-
-top_df = (
-    dfv[dfv["Year"] == year]
-    .dropna(subset=["Value"])
-    .sort_values("Value", ascending=False)
-    .head(10)
-    .rename(columns={"Country": "País", "Value": var_name})
-)
-
-if not top_df.empty:
-    # ====== Formateo elegante ======
-    top_df_display = top_df.copy()
+def _fmt_value(var_name: str, v: float) -> str:
+    if v is None or pd.isna(v):
+        return "—"
     if "USD" in var_name:
-        top_df_display[var_name] = top_df_display[var_name].apply(lambda x: f"${x:,.0f}")
-    elif "CO2" in var_name or "CO₂" in var_name:
-        top_df_display[var_name] = top_df_display[var_name].apply(lambda x: f"{x:,.0f} Mt CO₂")
-    elif "Población" in var_name:
-        top_df_display[var_name] = top_df_display[var_name].apply(lambda x: f"{x:,.0f} hab.")
+        return f"${v:,.0f}"
+    if "CO₂" in var_name or "CO2" in var_name:
+        if "per cápita" in var_name:
+            return f"{v:,.2f} t"
+        return f"{v:,.0f} Mt"
+    if "Población" in var_name:
+        return f"{v:,.0f} hab."
+    if "(ppm)" in var_name or "(ppb)" in var_name:
+        return f"{v:,.2f}"
+    return f"{v:,.2f}"
+
+# ------------- Caso A: GASES GLOBALES -------------
+if isinstance(st.session_state.map_var, str) and "— global" in st.session_state.map_var:
+    label = st.session_state.map_var.replace(" — global", "")
+    g = gases_globales[gases_globales["Label"] == label.replace(" (ppm)", "").replace(" (ppb)", "")] if " (" in label else gases_globales[gases_globales["Label"] == label]
+    if g.empty:
+        st.info("No hay datos globales para esta serie.")
     else:
-        top_df_display[var_name] = top_df_display[var_name].apply(lambda x: f"{x:,.2f}")
+        st.subheader(f"{label} — Serie temporal global")
+        fig = px.line(g, x="Year", y="Value", markers=True, labels={"Year":"Año","Value":label})
+        if use_log:
+            fig.update_yaxes(type="log")
+        st.plotly_chart(fig, use_container_width=True)
 
-    st.dataframe(top_df_display, use_container_width=True)
+        # Resumen
+        g_year = g[g["Year"] == min(max_year, st.session_state.year)]
+        if not g_year.empty:
+            val = g_year["Value"].iloc[0]
+            st.success(f"📅 En **{int(st.session_state.year)}**, el valor de **{label}** fue **{_fmt_value(label, val)}**.")
 
-    # ====== Resumen automático ======
-    pais_top = top_df.iloc[0]["País"]
-    valor_top = top_df.iloc[0][var_name]
-    texto_valor = (
-        f"{valor_top:,.0f} Mt CO₂" if "CO2" in var_name or "CO₂" in var_name
-        else f"{valor_top:,.0f} USD" if "USD" in var_name
-        else f"{valor_top:,.0f} hab." if "Población" in var_name
-        else f"{valor_top:,.2f}"
-    )
+        # Exportaciones sencillas
+        st.markdown("---")
+        st.subheader("💾 Exportar")
+        c1, c2 = st.columns(2)
+        with c1:
+            try:
+                csv = g.to_csv(index=False).encode("utf-8")
+                st.download_button("📄 Descargar datos (CSV)", data=csv, file_name=f"{label}_global.csv", mime="text/csv")
+            except Exception as e:
+                st.error(f"No se pudo exportar CSV: {e}")
+        with c2:
+            try:
+                from io import BytesIO
+                import plotly.io as pio
+                buffer = BytesIO()
+                fig.write_image(buffer, format="png")
+                st.download_button("🖼️ Descargar gráfico (PNG)", data=buffer, file_name=f"{label}_global.png", mime="image/png")
+            except Exception:
+                html_bytes = fig.to_html().encode("utf-8")
+                st.download_button("🌐 Descargar gráfico (HTML interactivo)", data=html_bytes, file_name=f"{label}_global.html", mime="text/html")
 
-    st.markdown(
-        f"""
-        **📊 Resumen:**  
-        En **{year}**, el país con mayor **{var_name.replace('_', ' ')}** fue  
-        **{pais_top}**, con un valor de **{texto_valor}**.
-        """,
-        unsafe_allow_html=True,
-    )
-
+# ------------- Caso B: INDICADORES POR PAÍS -------------
 else:
-    st.info("No hay datos para el año seleccionado.")
+    var_name = st.session_state.map_var
+    dfv = variables.get(var_name, pd.DataFrame(columns=["Country","Year","Value"]))
+    if dfv.empty:
+        st.info("No hay datos para la variable seleccionada.")
+        st.stop()
 
-# -------------------------------
-# Tendencia temporal (Top-5 del año)
-# -------------------------------
-st.subheader("📈 Tendencia temporal del Top-5")
-top5 = top_df["País"].head(5).tolist()
-trend = dfv[dfv["Country"].isin(top5)].copy()
-fig_line = px.line(
-    trend, x="Year", y="Value", color="Country",
-    labels={"Year": "Año", "Value": var_name, "Country": "País"},
-    title=None, markers=True
-)
-st.plotly_chart(fig_line, use_container_width=True)
+    # Aplicar filtro de países (si hay selección)
+    if st.session_state.countries_sel:
+        dfv = dfv[dfv["Country"].isin(st.session_state.countries_sel)]
 
-# -------------------------------
-# Descargas
-# -------------------------------
-st.subheader("💾 Exportar")
-c1, c2 = st.columns(2)
-with c1:
+    st.subheader(f"{var_name}")
+    fmt_two = (".2f" if any(s in var_name for s in ["USD","CO₂","CO2","(ppm)","(ppb)","per cápita"]) else ".0f")
+
+    # Choropleth
+    if animate:
+        fig_map = px.choropleth(
+            dfv, locations="Country", locationmode="country names",
+            color="Value", hover_name="Country", animation_frame="Year",
+            color_continuous_scale="Viridis",
+            labels={"Value": var_name}, title=None
+        )
+    else:
+        mdf = dfv[dfv["Year"] == st.session_state.year].copy()
+        fig_map = px.choropleth(
+            mdf, locations="Country", locationmode="country names",
+            color="Value", hover_name="Country",
+            color_continuous_scale="Viridis",
+            labels={"Value": var_name}, title=None
+        )
+    if use_log:
+        fig_map.update_coloraxes(colorbar_title=var_name, colorscale="Viridis")
+    fig_map.update_layout(margin=dict(l=0, r=0, t=0, b=0))
+    st.plotly_chart(fig_map, use_container_width=True)
+
+    # Top-10 del año
+    st.subheader(f"🏆 Top 10 países — {st.session_state.year}")
+    top_df = (
+        dfv[dfv["Year"] == st.session_state.year]
+        .dropna(subset=["Value"])
+        .sort_values("Value", ascending=False)
+        .head(10)
+        .rename(columns={"Country":"País","Year":"Año","Value":var_name})
+    )
+    if not top_df.empty:
+        # Formato agradable
+        top_show = top_df.copy()
+        top_show[var_name] = top_show[var_name].apply(lambda x: _fmt_value(var_name, x))
+        st.dataframe(top_show, use_container_width=True)
+        # Resumen
+        pais_top = top_df.iloc[0]["País"]
+        valor_top = top_df.iloc[0][var_name]
+        st.success(f"📊 En **{st.session_state.year}**, el valor más alto de **{var_name}** lo tiene **{pais_top}** con **{_fmt_value(var_name, valor_top)}**.")
+    else:
+        st.info("No hay datos para este año tras aplicar los filtros.")
+
+    # Tendencia temporal del Top-5 del año
+    st.subheader("📈 Tendencia temporal del Top-5")
+    top5 = top_df["País"].head(5).tolist() if not top_df.empty else []
+    trend = dfv[dfv["Country"].isin(top5)].copy()
+    if not trend.empty and len(top5) > 0:
+        fig_line = px.line(
+            trend, x="Year", y="Value", color="Country",
+            labels={"Year":"Año", "Value":var_name, "Country":"País"},
+            title=None, markers=True
+        )
+        if use_log:
+            fig_line.update_yaxes(type="log")
+        st.plotly_chart(fig_line, use_container_width=True)
+    else:
+        st.info("Selecciona un año con datos para construir el Top-5 y su serie temporal.")
+
+    # Conclusiones automáticas
+    st.subheader("🧩 Conclusiones automáticas")
+    concl = []
+    if not top_df.empty:
+        concl.append(f"• **{top_df.iloc[0]['País']}** lidera **{var_name}** en {st.session_state.year}.")
+    # pendiente media global sobre el rango disponible
     try:
-        csv = mdf.rename(columns={"Country":"País","Year":"Año","Value":var_name}).to_csv(index=False).encode("utf-8")
-        st.download_button("📄 Descargar datos (CSV)", data=csv, file_name="mapa_global_filtrado.csv", mime="text/csv")
-    except Exception as e:
-        st.error(f"No se pudo generar el CSV: {e}")
-with c2:
-    try:
-        import plotly.io as pio
-        from io import BytesIO
-        buffer = BytesIO()
-        fig_map.write_image(buffer, format="png")
-        st.download_button("🖼️ Descargar mapa (PNG)", data=buffer, file_name="mapa_global.png", mime="image/png")
+        gseries = dfv.groupby("Year")["Value"].mean().dropna()
+        if len(gseries) > 2:
+            x = gseries.index.values
+            y = gseries.values
+            coef = np.polyfit(x, y, 1)[0]
+            tend = "ascendente" if coef > 0 else "descendente" if coef < 0 else "estable"
+            concl.append(f"• Tendencia promedio global **{tend}** en el periodo ({coef:,.3g} por año).")
     except Exception:
-        html_bytes = fig_map.to_html().encode("utf-8")
-        st.download_button("🌐 Descargar mapa (HTML interactivo)", data=html_bytes, file_name="mapa_global.html", mime="text/html")
+        pass
+    if concl:
+        st.success("\n\n".join(concl))
+    else:
+        st.info("Ajusta los filtros para generar conclusiones útiles.")
+
+    # Exportaciones (datos + mapa)
+    st.markdown("---")
+    st.subheader("💾 Exportar")
+    c1, c2 = st.columns(2)
+    with c1:
+        try:
+            if animate:
+                export_df = dfv.copy()
+            else:
+                export_df = dfv[dfv["Year"] == st.session_state.year].copy()
+            csv = export_df.rename(columns={"Country":"País","Year":"Año","Value":var_name}).to_csv(index=False).encode("utf-8")
+            st.download_button("📄 Descargar datos (CSV)", data=csv, file_name="mapa_global_filtrado.csv", mime="text/csv")
+        except Exception as e:
+            st.error(f"No se pudo generar el CSV: {e}")
+    with c2:
+        try:
+            import plotly.io as pio
+            from io import BytesIO
+            buffer = BytesIO()
+            fig_map.write_image(buffer, format="png")
+            st.download_button("🖼️ Descargar mapa (PNG)", data=buffer, file_name="mapa_global.png", mime="image/png")
+        except Exception:
+            html_bytes = fig_map.to_html().encode("utf-8")
+            st.download_button("🌐 Descargar mapa (HTML interactivo)", data=html_bytes, file_name="mapa_global.html", mime="text/html")

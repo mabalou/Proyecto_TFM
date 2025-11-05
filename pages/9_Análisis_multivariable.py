@@ -13,7 +13,7 @@ from sklearn.linear_model import LinearRegression
 st.set_page_config(page_title="🔗 Análisis multivariable", layout="wide")
 st.title("🔗 Análisis multivariable: clima ↔ sociedad")
 
-with st.expander("ℹ️ **Descripción del análisis**", expanded=True):
+with st.expander("ℹ️ **Descripción del análisis**", expanded=False):
     st.markdown("""
     En esta sección se realiza un **análisis multivariable interactivo** que combina datos
     de **clima global** (temperatura, gases de efecto invernadero, nivel del mar, energía)

@@ -1,14 +1,14 @@
 # ==========================================
-# 00_Inicio.py — versión glass definitiva (expanders corregidos)
+# 00_Inicio.py — versión final pulida (colores corregidos + sin subrayados)
 # ==========================================
 import streamlit as st
 from pathlib import Path
 
 st.set_page_config(page_title="🌍 Visualizador climático global del TFM", layout="wide")
 
-# ----------------------------------------------------
-# Ocultar barra lateral y header
-# ----------------------------------------------------
+# -------------------------------
+# Ocultar sidebar y header nativo
+# -------------------------------
 st.markdown("""
 <style>
 [data-testid="stSidebar"] {display: none;}
@@ -26,9 +26,9 @@ div.block-container {
 </style>
 """, unsafe_allow_html=True)
 
-# ----------------------------------------------------
-# Definición de páginas
-# ----------------------------------------------------
+# -------------------------------
+# Páginas
+# -------------------------------
 PAGES = {
     "Inicio": "00_Inicio",
     "Temperatura": "1_Temperatura",
@@ -43,94 +43,69 @@ PAGES = {
     "Mapa global": "10_Mapa_global",
 }
 
-# ----------------------------------------------------
-# Estado de página y tema
-# ----------------------------------------------------
+# -------------------------------
+# Estado global (página / tema / filtros)
+# -------------------------------
 if "current_page" not in st.session_state:
     st.session_state.current_page = "Inicio"
-
-page_param = st.query_params.get("page")
-if page_param and page_param in PAGES:
-    st.session_state.current_page = page_param
-
 if "theme" not in st.session_state:
     st.session_state.theme = "dark"
+if "ui_show_filters" not in st.session_state:
+    st.session_state.ui_show_filters = False
 
-url_theme = st.query_params.get("theme")
-if url_theme in ("light", "dark"):
-    st.session_state.theme = url_theme
-if st.query_params.get("theme") != st.session_state.theme:
-    st.query_params.update({"theme": st.session_state.theme})
+qp = st.query_params
+if qp.get("page") in PAGES:
+    st.session_state.current_page = qp["page"]
+if qp.get("theme") in ("light", "dark"):
+    st.session_state.theme = qp["theme"]
+if qp.get("filters") is not None:
+    st.session_state.ui_show_filters = qp["filters"] in ("1", "true", "on")
+
 current_theme = st.session_state.theme
-
-# ----------------------------------------------------
-# Cabecera glass + menú + switch
-# ----------------------------------------------------
 other_theme = "light" if current_theme == "dark" else "dark"
-label_text = "☀️ Modo claro" if current_theme == "light" else "🌙 Modo oscuro"
-toggle_url = f"?page={st.session_state.current_page}&theme={other_theme}"
 
-menu_items = ""
+# -------------------------------
+# URLs dinámicas
+# -------------------------------
+theme_url = f"?page={st.session_state.current_page}&theme={other_theme}&filters={'1' if st.session_state.ui_show_filters else '0'}"
+filters_url = f"?page={st.session_state.current_page}&theme={current_theme}&filters={'0' if st.session_state.ui_show_filters else '1'}"
+
+# -------------------------------
+# Construir menú
+# -------------------------------
+menu_html = ""
 for name, module in PAGES.items():
     active = "active" if name == st.session_state.current_page else ""
-    menu_items += f'<a class="menu-link {active}" href="?page={name}&theme={current_theme}" target="_self">{name}</a>'
+    filters_flag = "1" if st.session_state.ui_show_filters else "0"
+    menu_html += f'<a class="menu-link {active}" href="?page={name}&theme={current_theme}&filters={filters_flag}" target="_self">{name}</a>'
 
-# ----------------------------------------------------
-# Estilos principales (corregidos)
-# ----------------------------------------------------
+# -------------------------------
+# Estilos generales (tema claro/oscuro)
+# -------------------------------
+light_override = (
+    ":root {"
+    "--bg-color: #f7f7f5;"
+    "--text-color: #1b1b1b;"
+    "--menu-bg: rgba(255,255,255,0.9);"
+    "--menu-link: #2b3a3a;"
+    "--menu-active: #007b7b;"
+    "--toggle-bg: #ffffff;"
+    "--toggle-text: #2b3a3a;"
+    "--switch-bg: #bbb;"
+    "--switch-ball: #007b7b;"
+    "--input-bg: #ffffff;"
+    "--button-bg: #eaeaea;"
+    "--button-text: #1a1a1a;"
+    "--metric-text: #1a1a1a;"
+    "--primary-color: #007b7b;"
+    "}"
+) if current_theme == "light" else ""
+
+# -------------------------------
+# CSS visual principal
+# -------------------------------
 st.markdown(f"""
 <style>
-.header-bar {{
-    position: fixed;
-    top: 0; left: 0; right: 0;
-    z-index: 9999;
-    display: flex; justify-content: space-between; align-items: center;
-    padding: 1rem 2rem;
-    border-radius: 0 0 18px 18px;
-    background: rgba(30,30,30,0.85);
-    box-shadow: 0 4px 14px rgba(0,0,0,0.25);
-    backdrop-filter: blur(12px);
-    transition: background 0.4s ease, color 0.4s ease;
-}}
-div.block-container {{ padding-top: 7.2rem !important; }}
-
-.menu-links {{
-    display: flex; flex-wrap: wrap; gap: 1.8rem; justify-content: center; align-items: center;
-}}
-.menu-link {{
-    font-size: 1.05rem; font-weight: 600;
-    text-decoration: none !important; border-bottom: 2px solid transparent;
-    transition: all 0.25s ease; color: var(--menu-link);
-}}
-.menu-link:hover, .menu-link.active {{
-    color: var(--menu-active);
-    border-bottom: 2px solid var(--menu-active);
-}}
-
-.theme-toggle {{
-    display: flex; align-items: center; gap: 10px;
-    background: var(--toggle-bg);
-    border-radius: 25px; padding: 6px 14px;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.35);
-    font-size: 0.9rem; font-weight: 600;
-    color: var(--toggle-text); white-space: nowrap;
-}}
-.toggle-switch {{
-    position: relative; width: 50px; height: 26px;
-    background: var(--switch-bg);
-    border-radius: 34px; cursor: pointer;
-    display: inline-block; overflow: hidden;
-}}
-.toggle-switch::before {{
-    content: ""; position: absolute; top: 3px; left: 3px;
-    width: 20px; height: 20px;
-    background: var(--switch-ball); border-radius: 50%;
-    transition: transform 0.25s ease, background 0.25s ease;
-}}
-
-/* ===========================
-   MODO OSCURO
-   =========================== */
 :root {{
     --bg-color: #0f0f0f;
     --text-color: #f0f0f0;
@@ -147,94 +122,127 @@ div.block-container {{ padding-top: 7.2rem !important; }}
     --metric-text: #ffffff;
     --primary-color: #aeeae1;
 }}
+{light_override}
 
-/* ===========================
-   MODO CLARO MEJORADO
-   =========================== */
-{"".join([
-    ":root {",
-    "--bg-color: #f7f7f5;",
-    "--text-color: #1b1b1b;",
-    "--menu-bg: rgba(255,255,255,0.9);",
-    "--menu-link: #2b3a3a;",
-    "--menu-active: #007b7b;",
-    "--toggle-bg: #ffffff;",
-    "--toggle-text: #2b3a3a;",
-    "--switch-bg: #bbb;",
-    "--switch-ball: #007b7b;",
-    "--input-bg: #ffffff;",
-    "--button-bg: #f0f0f0;",
-    "--button-text: #1a1a1a;",
-    "--metric-text: #111;",
-    "--primary-color: #007b7b;",
-    "}"
-]) if current_theme == "light" else ""}
-
-.theme-toggle.is-light .toggle-switch::before {{ transform: translateX(24px); }}
-
+/* Fondo general */
 [data-testid="stAppViewContainer"] {{
     background-color: var(--bg-color);
     color: var(--text-color);
-    transition: background-color 0.3s ease, color 0.3s ease;
+    transition: background-color .3s ease, color .3s ease;
 }}
 
-/* ===========================
-   EXPANDERS 100% CORREGIDOS
-   =========================== */
-[data-testid="stExpander"], 
-[data-testid="stExpanderContent"],
-[data-testid="stExpander"] div[role="region"],
-[data-testid="stExpander"] div[data-testid="stVerticalBlock"],
-[data-testid="stExpander"] div[role="button"],
-[data-testid="stExpander"] * {{
+/* Colores globales */
+[data-testid="stAppViewContainer"], [data-testid="stMarkdown"], .stText, p, label, h1, h2, h3, h4, h5, h6, span {{
+    color: var(--text-color) !important;
+}}
+[data-baseweb="input"], [data-baseweb="select"], [data-baseweb="slider"], .stMultiSelect, .stSelectbox, .stTextInput input {{
+    color: var(--text-color) !important;
     background-color: var(--input-bg) !important;
-    color: var(--text-color) !important;
-    border: none !important;
-    border-radius: 10px !important;
 }}
-[data-testid="stExpander"] p, [data-testid="stExpander"] span, [data-testid="stExpander"] li {{
+[data-testid="stCheckbox"], .stCheckbox, [data-testid="stSliderLabel"] {{
     color: var(--text-color) !important;
+}}
+[data-testid="stMetricLabel"], [data-testid="stMetricValue"] {{
+    color: var(--metric-text) !important;
+}}
+[data-testid="stButton"] button, .stButton>button {{
+    background-color: var(--button-bg) !important;
+    color: var(--button-text) !important;
+    border-radius: 8px !important;
+    font-weight: 600 !important;
+    border: 1px solid rgba(0,0,0,0.1);
+}}
+[data-testid="stButton"] button:hover {{
+    background-color: var(--primary-color) !important;
+    color: white !important;
 }}
 
-/* ===========================
-   MÉTRICAS / BOTONES
-   =========================== */
-[data-testid="stMetric"], [data-testid="stMetricLabel"], [data-testid="stMetricValue"],
-button, .stButton>button {{
-    color: var(--metric-text) !important;
-    background-color: var(--button-bg) !important;
+/* Header */
+.header-bar {{
+    position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 1rem 2rem; border-radius: 0 0 18px 18px;
+    background: var(--menu-bg); backdrop-filter: blur(12px);
+    box-shadow: 0 4px 14px rgba(0,0,0,0.25);
 }}
+div.block-container {{ padding-top: 7.2rem !important; }}
+
+/* Menú */
+.menu-links {{
+    display: flex; flex-wrap: wrap; gap: 1.8rem;
+    justify-content: center; align-items: center;
+}}
+.menu-link {{
+    font-size: 1.05rem; font-weight: 600;
+    text-decoration: none !important;
+    border-bottom: 2px solid transparent;
+    color: var(--menu-link);
+    transition: all 0.25s ease;
+}}
+.menu-link:hover, .menu-link.active {{
+    color: var(--menu-active);
+    border-bottom: 2px solid var(--menu-active);
+}}
+
+/* Toggles */
+.tools-wrap {{
+    display: flex; flex-direction: column; gap: 8px; align-items: flex-end;
+}}
+.pill {{
+    display: inline-flex; align-items: center; gap: 10px;
+    background: var(--toggle-bg); color: var(--toggle-text);
+    border-radius: 25px; padding: 6px 14px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+    font-weight: 600; white-space: nowrap;
+    text-decoration: none !important;
+}}
+.pill .switch {{
+    position: relative; width: 50px; height: 26px;
+    background: var(--switch-bg);
+    border-radius: 34px; overflow: hidden;
+}}
+.pill .switch::before {{
+    content: ""; position: absolute; top: 3px; left: 3px;
+    width: 20px; height: 20px;
+    background: var(--switch-ball);
+    border-radius: 50%;
+    transition: transform .25s ease;
+}}
+.pill.is-on .switch::before {{ transform: translateX(24px); }}
 </style>
 
-<div class="header-bar" style="background: var(--menu-bg);">
-    <div class="menu-links">{menu_items}</div>
-    <div class="theme-toggle {'is-light' if current_theme == 'light' else ''}">
-        <span>{label_text}</span>
-        <a class="toggle-switch" href="{toggle_url}" target="_self"></a>
-    </div>
+<div class="header-bar">
+  <div class="menu-links">{menu_html}</div>
+  <div class="tools-wrap">
+    <a class="pill {'is-on' if current_theme=='light' else ''}" href="{theme_url}" target="_self">
+      <span>{'☀️ Modo claro' if current_theme=='light' else '🌙 Modo oscuro'}</span>
+      <span class="switch"></span>
+    </a>
+    {f'<a class="pill {"is-on" if st.session_state.ui_show_filters else ""}" href="{filters_url}" target="_self"><span>⚙️ Filtros</span><span class="switch"></span></a>' if st.session_state.current_page != "Inicio" else ""}
+  </div>
 </div>
 """, unsafe_allow_html=True)
 
-# ----------------------------------------------------
-# Navegación
-# ----------------------------------------------------
+# -------------------------------
+# Navegación a otras páginas
+# -------------------------------
 selected_module = PAGES[st.session_state.current_page]
 if selected_module != "00_Inicio":
     exec(Path(f"pages/{selected_module}.py").read_text(), globals())
     st.stop()
 
-# ----------------------------------------------------
-# Contenido principal
-# ----------------------------------------------------
+# -------------------------------
+# Contenido principal de Inicio
+# -------------------------------
 st.markdown("""
 <div style='text-align:center;margin-top:1.2rem;'>
-    <h1 style='font-size:2.3rem;font-weight:800;margin-bottom:0.6rem;'>🌍 Visualizador climático global del TFM</h1>
-    <p style='font-size:1.15rem;line-height:1.6em;max-width:900px;margin:auto;'>
-    Este proyecto forma parte del <b>Trabajo de Fin de Máster</b> del programa
-    <b>Máster en Big Data & Visual Analytics</b> (UNIR).<br><br>
-    Explora cómo el <b>cambio climático global</b> se relaciona con variables
-    socioeconómicas, energéticas y ambientales a lo largo del tiempo.
-    </p>
+  <h1 style='font-size:2.3rem;font-weight:800;margin-bottom:0.6rem;'>🌍 Visualizador climático global del TFM</h1>
+  <p style='font-size:1.15rem;line-height:1.6em;max-width:900px;margin:auto;'>
+  Este proyecto forma parte del <b>Trabajo de Fin de Máster</b> del programa
+  <b>Máster en Big Data & Visual Analytics</b> (UNIR).<br><br>
+  Explora cómo el <b>cambio climático global</b> se relaciona con variables
+  socioeconómicas, energéticas y ambientales a lo largo del tiempo.
+  </p>
 </div>
 """, unsafe_allow_html=True)
 
