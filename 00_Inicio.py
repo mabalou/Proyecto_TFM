@@ -1,9 +1,9 @@
 # ==========================================
-# 00_Inicio.py — versión final responsive (menú móvil funcional)
+# 00_Inicio.py — versión final (mismo diseño, menú móvil funcional)
 # ==========================================
 import streamlit as st
 from pathlib import Path
-import streamlit.components.v1 as components
+import streamlit.components.v1 as components  # 👈 necesario para JS funcional
 
 st.set_page_config(page_title="🌍 Visualizador climático global del TFM", layout="wide")
 
@@ -101,7 +101,7 @@ light_override = (
 ) if current_theme == "light" else ""
 
 # ----------------------------------------
-# CSS responsive + header
+# CSS responsive (idéntico al tuyo)
 # ----------------------------------------
 st.markdown(f"""
 <style>
@@ -123,13 +123,32 @@ st.markdown(f"""
 }}
 {light_override}
 
-/* Fondo */
+/* Fondo general */
 [data-testid="stAppViewContainer"] {{
     background-color: var(--bg-color);
     color: var(--text-color);
+    transition: background-color .3s ease, color .3s ease;
 }}
 
-/* Header principal */
+/* Texto general */
+[data-testid="stAppViewContainer"], p, label, h1, h2, h3, h4, h5, h6, span {{
+    color: var(--text-color) !important;
+}}
+
+/* Botones */
+[data-testid="stButton"] button, .stButton>button {{
+    background-color: var(--button-bg) !important;
+    color: var(--button-text) !important;
+    border-radius: 8px !important;
+    font-weight: 600 !important;
+    border: 1px solid rgba(0,0,0,0.1);
+}}
+[data-testid="stButton"] button:hover {{
+    background-color: var(--primary-color) !important;
+    color: white !important;
+}}
+
+/* Header */
 .header-bar {{
     position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
     display: flex; justify-content: space-between; align-items: center;
@@ -139,7 +158,7 @@ st.markdown(f"""
 }}
 div.block-container {{ padding-top: 7.2rem !important; }}
 
-/* Enlaces */
+/* Menú principal */
 .menu-links {{
     display: flex; flex-wrap: wrap; gap: 1.8rem;
     justify-content: center; align-items: center;
@@ -156,7 +175,7 @@ div.block-container {{ padding-top: 7.2rem !important; }}
     border-bottom: 2px solid var(--menu-active);
 }}
 
-/* Toggle */
+/* Botones toggles */
 .tools-wrap {{
     display: flex; flex-direction: column; gap: 8px; align-items: flex-end;
 }}
@@ -165,28 +184,34 @@ div.block-container {{ padding-top: 7.2rem !important; }}
     background: var(--toggle-bg); color: var(--toggle-text);
     border-radius: 25px; padding: 6px 14px;
     box-shadow: 0 4px 14px rgba(0,0,0,0.35);
-    font-weight: 600;
+    font-weight: 600; white-space: nowrap;
+    text-decoration: none !important;
 }}
 .pill .switch {{
     position: relative; width: 50px; height: 26px;
-    background: var(--switch-bg); border-radius: 34px;
+    background: var(--switch-bg);
+    border-radius: 34px; overflow: hidden;
 }}
 .pill .switch::before {{
     content: ""; position: absolute; top: 3px; left: 3px;
-    width: 20px; height: 20px; border-radius: 50%;
+    width: 20px; height: 20px;
     background: var(--switch-ball);
+    border-radius: 50%;
     transition: transform .25s ease;
 }}
 .pill.is-on .switch::before {{ transform: translateX(24px); }}
 
-/* Menú móvil */
+/* 🔹 Menú móvil */
 .menu-toggle {{
     display: none;
     cursor: pointer;
-    font-size: 1.3rem;
-    color: var(--menu-active);
+    font-size: 1.4rem;
     font-weight: 700;
+    color: var(--menu-active);
+    margin-right: 0.8rem;
 }}
+
+/* Responsive */
 @media (max-width: 768px) {{
   .header-bar {{
     flex-direction: column;
@@ -195,26 +220,34 @@ div.block-container {{ padding-top: 7.2rem !important; }}
   }}
   .menu-toggle {{
     display: block;
-    margin-bottom: 0.6rem;
   }}
   .menu-links {{
     display: none;
     flex-direction: column;
-    width: 100%;
     align-items: flex-start;
-    gap: 0.8rem;
+    gap: 0.6rem;
+    width: 100%;
   }}
   .menu-links.show {{
-    display: flex !important;
+    display: flex;
   }}
   .menu-link {{
     font-size: 1rem;
+    padding-left: 0.5rem;
   }}
   .tools-wrap {{
     width: 100%;
     flex-direction: row;
     justify-content: flex-end;
-    margin-top: 0.6rem;
+    gap: 10px;
+    margin-top: 0.5rem;
+  }}
+  .pill {{
+    padding: 5px 10px;
+    font-size: 0.9rem;
+  }}
+  div.block-container {{
+    padding-top: 9rem !important;
   }}
 }}
 </style>
@@ -232,19 +265,19 @@ div.block-container {{ padding-top: 7.2rem !important; }}
 </div>
 """, unsafe_allow_html=True)
 
-# ----------------------------------------
-# JS para el menú desplegable
-# ----------------------------------------
+# ✅ Bloque JS seguro (menú móvil funcional)
 components.html("""
 <script>
-const toggle = document.getElementById("menuToggle");
-const menu = document.getElementById("menuLinks");
+const toggle = document.getElementById('menuToggle');
+const menu = document.getElementById('menuLinks');
 if (toggle && menu) {
-  toggle.addEventListener("click", () => menu.classList.toggle("show"));
+  toggle.addEventListener('click', () => {
+    menu.classList.toggle('show');
+  });
   // cerrar menú al hacer clic en un enlace
-  menu.querySelectorAll("a").forEach(a => a.addEventListener("click", () => {
-    menu.classList.remove("show");
-  }));
+  menu.querySelectorAll('a').forEach(a => {
+    a.addEventListener('click', () => menu.classList.remove('show'));
+  });
 }
 </script>
 """, height=0)
