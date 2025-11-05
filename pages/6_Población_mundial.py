@@ -1,5 +1,5 @@
 # ==========================================
-# 6_Población_mundial.py — versión sincronizada con header
+# 6_Población_mundial.py — versión con resumen lateral + ejes ampliados + estilo homogéneo
 # ==========================================
 import streamlit as st
 import pandas as pd
@@ -82,91 +82,104 @@ mostrar_prediccion = st.session_state.mostrar_prediccion
 df_filtrado = df[(df["País"].isin(paises_sel)) & (df["Año"].between(*rango))]
 
 # ------------------------------------------
-# VISUALIZACIÓN PRINCIPAL
+# VISUALIZACIÓN PRINCIPAL + RESUMEN LATERAL
 # ------------------------------------------
 st.subheader("📈 Evolución demográfica")
 
 if df_filtrado.empty:
     st.info("Selecciona países y un rango de años válido para visualizar los datos.")
 else:
-    if tipo_grafico == "Línea":
-        fig = px.line(df_filtrado, x="Año", y="Población", color="País", markers=True,
-                      labels={"Población": "Población", "Año": "Año"},
-                      title="Evolución de la población")
-    elif tipo_grafico == "Área":
-        fig = px.area(df_filtrado, x="Año", y="Población", color="País",
-                      labels={"Población": "Población", "Año": "Año"},
-                      title="Evolución de la población")
-    else:
-        fig = px.bar(df_filtrado, x="Año", y="Población", color="País",
-                     labels={"Población": "Población", "Año": "Año"},
-                     title="Evolución de la población")
+    col1, col2 = st.columns([3, 1], gap="large")
 
-    if usar_escala_log:
-        fig.update_yaxes(type="log", title="Población (escala logarítmica)")
+    with col1:
+        if tipo_grafico == "Línea":
+            fig = px.line(df_filtrado, x="Año", y="Población", color="País", markers=True,
+                          labels={"Población": "Población", "Año": "Año"},
+                          title="Evolución de la población")
+        elif tipo_grafico == "Área":
+            fig = px.area(df_filtrado, x="Año", y="Población", color="País",
+                          labels={"Población": "Población", "Año": "Año"},
+                          title="Evolución de la población")
+        else:
+            fig = px.bar(df_filtrado, x="Año", y="Población", color="País",
+                         labels={"Población": "Población", "Año": "Año"},
+                         title="Evolución de la población")
 
-    # Tendencias lineales
-    if mostrar_tendencia:
-        for pais in paises_sel:
-            df_pais = df_filtrado[df_filtrado["País"] == pais]
-            if len(df_pais) > 1:
-                x = df_pais["Año"].values.reshape(-1, 1)
-                y = df_pais["Población"].values
-                modelo = LinearRegression().fit(x, y)
-                y_pred = modelo.predict(x)
-                fig.add_scatter(x=df_pais["Año"], y=y_pred, mode="lines", name=f"Tendencia {pais}",
-                                line=dict(dash="dash", width=2))
+        # Ejes y fuentes más grandes
+        fig.update_layout(
+            xaxis_title_font=dict(size=17),
+            yaxis_title_font=dict(size=17),
+            font=dict(size=15)
+        )
 
-    st.plotly_chart(fig, use_container_width=True)
+        if usar_escala_log:
+            fig.update_yaxes(type="log", title="Población (escala logarítmica)")
+
+        # Tendencia
+        if mostrar_tendencia:
+            for pais in paises_sel:
+                df_pais = df_filtrado[df_filtrado["País"] == pais]
+                if len(df_pais) > 1:
+                    x = df_pais["Año"].values.reshape(-1, 1)
+                    y = df_pais["Población"].values
+                    modelo = LinearRegression().fit(x, y)
+                    y_pred = modelo.predict(x)
+                    fig.add_scatter(x=df_pais["Año"], y=y_pred, mode="lines", name=f"Tendencia {pais}",
+                                    line=dict(color="red", dash="dash", width=2))
+
+        st.plotly_chart(fig, use_container_width=True)
+
+    with col2:
+        st.markdown("### 🧾 Resumen del período")
+        df_reciente = df_filtrado[df_filtrado["Año"] == df_filtrado["Año"].max()]
+        pais_max = df_reciente.loc[df_reciente["Población"].idxmax(), "País"]
+        valor_max = df_reciente["Población"].max()
+        pais_min = df_reciente.loc[df_reciente["Población"].idxmin(), "País"]
+        valor_min = df_reciente["Población"].min()
+        media = df_filtrado.groupby("País")["Población"].mean().mean()
+
+        st.markdown(f"""
+        - 👑 **Mayor población:** {pais_max} ({valor_max:,.0f})  
+        - 🌱 **Menor población:** {pais_min} ({valor_min:,.0f})  
+        - 🌍 **Media general:** {media:,.0f}  
+        - 📆 **Periodo:** {rango[0]}–{rango[1]}  
+        - 🧭 **Países analizados:** {", ".join(paises_sel)}  
+        """)
 
 # ------------------------------------------
-# RESUMEN AUTOMÁTICO
-# ------------------------------------------
-st.subheader("🧾 Resumen automático del análisis")
-
-if not df_filtrado.empty:
-    df_reciente = df_filtrado[df_filtrado["Año"] == df_filtrado["Año"].max()]
-    pais_max = df_reciente.loc[df_reciente["Población"].idxmax(), "País"]
-    valor_max = df_reciente["Población"].max()
-    st.markdown(f"📊 En **{int(df_reciente['Año'].max())}**, el país con mayor población fue **{pais_max}** con **{valor_max:,.0f} habitantes.**")
-else:
-    st.info("Selecciona un rango y país válidos para generar conclusiones.")
-
-# ------------------------------------------
-# ANÁLISIS POR DÉCADAS
+# MEDIA POR DÉCADAS
 # ------------------------------------------
 if mostrar_decadas and not df_filtrado.empty:
-    with st.expander("📊 Media de población por década", expanded=True):
-        df_dec = df_filtrado.copy()
-        df_dec["Década"] = (df_dec["Año"] // 10) * 10
-        df_grouped = df_dec.groupby(["Década", "País"])["Población"].mean().reset_index()
-        st.dataframe(df_grouped.style.format({"Población": "{:,.0f}"}), use_container_width=True)
-
-        fig_dec = px.bar(df_grouped, x="Década", y="Población", color="País",
-                         barmode="group", labels={"Población": "Población media", "Década": "Década"},
-                         title="Evolución de la población media por década")
-        st.plotly_chart(fig_dec, use_container_width=True)
+    st.subheader("📊 Población media por década")
+    df_dec = df_filtrado.copy()
+    df_dec["Década"] = (df_dec["Año"] // 10) * 10
+    df_grouped = df_dec.groupby(["Década", "País"])["Población"].mean().reset_index()
+    fig_dec = px.bar(df_grouped, x="Década", y="Población", color="País",
+                     barmode="group", labels={"Población": "Población media", "Década": "Década"},
+                     title="Evolución de la población media por década")
+    fig_dec.update_layout(xaxis_title_font=dict(size=16), yaxis_title_font=dict(size=16))
+    st.plotly_chart(fig_dec, use_container_width=True)
 
 # ------------------------------------------
 # PREDICCIÓN HASTA 2100
 # ------------------------------------------
 if mostrar_prediccion and not df_filtrado.empty:
-    with st.expander("🔮 Proyección hasta 2100", expanded=True):
-        fig_pred = px.line(title="Proyecciones de población (hasta 2100)",
-                           labels={"x": "Año", "y": "Población"})
-        for pais in paises_sel:
-            df_pais = df[df["País"] == pais]
-            if len(df_pais) > 1:
-                x = df_pais["Año"].values.reshape(-1, 1)
-                y = df_pais["Población"].values
-                modelo = LinearRegression().fit(x, y)
-                x_pred = np.arange(x.max() + 1, 2101).reshape(-1, 1)
-                y_pred = modelo.predict(x_pred)
-                fig_pred.add_scatter(x=x_pred.flatten(), y=y_pred, mode="lines", name=pais)
-        st.plotly_chart(fig_pred, use_container_width=True)
+    st.subheader("🔮 Proyección hasta 2100")
+    fig_pred = px.line(title="Proyecciones de población (hasta 2100)",
+                       labels={"x": "Año", "y": "Población"})
+    for pais in paises_sel:
+        df_pais = df[df["País"] == pais]
+        if len(df_pais) > 1:
+            x = df_pais["Año"].values.reshape(-1, 1)
+            y = df_pais["Población"].values
+            modelo = LinearRegression().fit(x, y)
+            x_pred = np.arange(x.max() + 1, 2101).reshape(-1, 1)
+            y_pred = modelo.predict(x_pred)
+            fig_pred.add_scatter(x=x_pred.flatten(), y=y_pred, mode="lines", name=pais)
+    st.plotly_chart(fig_pred, use_container_width=True)
 
 # ------------------------------------------
-# CONCLUSIONES AUTOMÁTICAS
+# CONCLUSIONES AUTOMÁTICAS (corregido)
 # ------------------------------------------
 st.subheader("🧩 Conclusiones automáticas")
 
@@ -180,28 +193,29 @@ if not df_filtrado.empty:
             modelo = LinearRegression().fit(x, y)
             tendencias[pais] = modelo.coef_[0]
 
-    if len(paises_sel) == 1:
-        pais = paises_sel[0]
-        coef = list(tendencias.values())[0]
-        color_fondo = "#ffcccc" if coef > 0 else "#ccffcc" if coef < 0 else "#e6e6e6"
-        st.markdown(
-            f"""
-            <div style="background-color:{color_fondo}; padding:15px; border-radius:12px;">
-                <h4>📋 Conclusión ({rango[0]}–{rango[1]})</h4>
-                <p>La población de <b>{pais}</b> muestra una tendencia 
-                {'ascendente 📈' if coef > 0 else 'descendente 📉' if coef < 0 else 'estable ⚖️'} 
-                con un cambio medio de <b>{coef:,.0f} hab/año</b>.</p>
-            </div>
-            """, unsafe_allow_html=True
-        )
-    else:
-        df_tend = pd.DataFrame(list(tendencias.items()), columns=["País", "Crecimiento medio (hab/año)"])
-        st.dataframe(df_tend.style.format({"Crecimiento medio (hab/año)": "{:,.0f}"}))
+    bloques_html = []
+    for pais, coef in tendencias.items():
+        tendencia = "ascendente" if coef > 0 else "descendente" if coef < 0 else "estable"
+        color_fondo = "#006666" if coef > 0 else "#2e8b57" if coef < 0 else "#555555"
+        icono = "📈" if coef > 0 else "📉" if coef < 0 else "⚖️"
+
+        bloque = f"""
+        <div style='background-color:{color_fondo};
+                    padding:1rem;
+                    border-radius:10px;
+                    color:white;
+                    margin-bottom:10px;'>
+            {icono} La población de <b>{pais}</b> muestra una tendencia <b>{tendencia}</b>,
+            con un cambio medio de <b>{coef:,.0f} hab/año</b>.
+        </div>
+        """
+        bloques_html.append(bloque)
+
+    st.markdown("".join(bloques_html), unsafe_allow_html=True)
 
 # ------------------------------------------
 # DESCARGAS
 # ------------------------------------------
-st.markdown("---")
 st.subheader("💾 Exportar datos y gráficos")
 
 col1, col2 = st.columns(2)

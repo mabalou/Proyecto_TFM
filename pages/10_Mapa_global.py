@@ -315,8 +315,32 @@ else:
         )
     if use_log:
         fig_map.update_coloraxes(colorbar_title=var_name, colorscale="Viridis")
-    fig_map.update_layout(margin=dict(l=0, r=0, t=0, b=0))
-    st.plotly_chart(fig_map, use_container_width=True)
+        fig_map.update_layout(margin=dict(l=0, r=0, t=0, b=0))
+
+    # ✅ Añadimos resumen lateral como en el resto de páginas
+    c1, c2 = st.columns([3, 1], gap="large")
+
+    with c1:
+        st.plotly_chart(fig_map, use_container_width=True)
+
+    with c2:
+        st.markdown("### 🧾 Resumen")
+        mdf = dfv[dfv["Year"] == st.session_state.year].dropna(subset=["Value"])
+        if not mdf.empty:
+            vmin, vmax = mdf["Value"].min(), mdf["Value"].max()
+            media = mdf["Value"].mean()
+            pais_min = mdf.loc[mdf["Value"].idxmin(), "Country"]
+            pais_max = mdf.loc[mdf["Value"].idxmax(), "Country"]
+
+            st.markdown(f"""
+            - 📆 **Año:** {st.session_state.year}  
+            - 🔼 **Máximo:** {_fmt_value(var_name, vmax)} (*{pais_max}*)  
+            - 🔽 **Mínimo:** {_fmt_value(var_name, vmin)} (*{pais_min}*)  
+            - 📊 **Media mundial:** {_fmt_value(var_name, media)}
+            """)
+        else:
+            st.info("No hay datos válidos para el año seleccionado.")
+
 
     # Top-10 del año
     st.subheader(f"🏆 Top 10 países — {st.session_state.year}")

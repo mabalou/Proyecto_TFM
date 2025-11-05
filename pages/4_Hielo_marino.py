@@ -1,5 +1,5 @@
 # ==========================================
-# 4_Hielo_marino.py — versión sincronizada con header
+# 4_Hielo_marino.py — versión con resumen lateral + ejes ampliados + conclusiones automáticas
 # ==========================================
 import streamlit as st
 import pandas as pd
@@ -55,7 +55,7 @@ def cargar_datos_ambos():
     return pd.concat([artico, antartico], ignore_index=True)
 
 # ------------------------------------------
-# ESTADO Y FILTROS (sin sidebar)
+# ESTADO Y FILTROS
 # ------------------------------------------
 defaults = {
     "ui_show_filters": False,
@@ -93,79 +93,91 @@ df = cargar_datos(region)
 df_filtrado = df[(df["Año"] >= rango[0]) & (df["Año"] <= rango[1])]
 
 # ------------------------------------------
-# VISUALIZACIÓN PRINCIPAL
+# VISUALIZACIÓN PRINCIPAL + RESUMEN LATERAL
 # ------------------------------------------
 st.subheader("📈 Evolución temporal")
 
 if df_filtrado.empty:
     st.info("Selecciona un rango de años válido para visualizar los datos.")
 else:
-    titulo = f"Evolución de la extensión del hielo marino ({region})"
-    if tipo_grafico == "Línea":
-        fig = px.line(df_filtrado, x="Año", y="Extensión", markers=True,
-                      labels={"Extensión": "Extensión (millones km²)", "Año": "Año"},
-                      title=titulo)
-    elif tipo_grafico == "Área":
-        fig = px.area(df_filtrado, x="Año", y="Extensión",
-                      labels={"Extensión": "Extensión (millones km²)", "Año": "Año"},
-                      title=titulo)
-    else:
-        fig = px.bar(df_filtrado, x="Año", y="Extensión",
-                     labels={"Extensión": "Extensión (millones km²)", "Año": "Año"},
-                     title=titulo)
+    col1, col2 = st.columns([3, 1], gap="large")
 
-    if mostrar_tendencia:
-        x = df_filtrado["Año"].values.reshape(-1, 1)
-        y = df_filtrado["Extensión"].values
-        modelo = LinearRegression().fit(x, y)
-        y_pred = modelo.predict(x)
-        coef = modelo.coef_[0]
-        fig.add_scatter(x=df_filtrado["Año"], y=y_pred, mode="lines", name="Tendencia",
-                        line=dict(color="red", dash="dash", width=2))
-        st.markdown(f"📉 La tendencia indica un cambio medio de `{coef:.4f}` millones km²/año.")
+    with col1:
+        titulo = f"Evolución de la extensión del hielo marino ({region})"
+        if tipo_grafico == "Línea":
+            fig = px.line(df_filtrado, x="Año", y="Extensión", markers=True,
+                          labels={"Extensión": "Extensión (millones km²)", "Año": "Año"},
+                          title=titulo)
+        elif tipo_grafico == "Área":
+            fig = px.area(df_filtrado, x="Año", y="Extensión",
+                          labels={"Extensión": "Extensión (millones km²)", "Año": "Año"},
+                          title=titulo)
+        else:
+            fig = px.bar(df_filtrado, x="Año", y="Extensión",
+                         labels={"Extensión": "Extensión (millones km²)", "Año": "Año"},
+                         title=titulo)
 
-    st.plotly_chart(fig, use_container_width=True)
+        # Ejes más grandes
+        fig.update_layout(
+            xaxis_title_font=dict(size=17),
+            yaxis_title_font=dict(size=17),
+            font=dict(size=15)
+        )
 
-# ------------------------------------------
-# RESUMEN AUTOMÁTICO
-# ------------------------------------------
-st.subheader("🧾 Resumen automático del análisis")
+        # Línea de tendencia
+        coef = 0
+        if mostrar_tendencia:
+            x = df_filtrado["Año"].values.reshape(-1, 1)
+            y = df_filtrado["Extensión"].values
+            modelo = LinearRegression().fit(x, y)
+            y_pred = modelo.predict(x)
+            coef = modelo.coef_[0]
+            fig.add_scatter(x=df_filtrado["Año"], y=y_pred, mode="lines", name="Tendencia",
+                            line=dict(color="red", dash="dash", width=2))
 
-if not df_filtrado.empty:
-    inicio, fin = df_filtrado["Extensión"].iloc[0], df_filtrado["Extensión"].iloc[-1]
-    cambio = fin - inicio
-    signo = "disminución" if cambio < 0 else "aumento" if cambio > 0 else "estabilidad"
+        st.plotly_chart(fig, use_container_width=True)
 
-    st.success(
-        f"📅 Entre **{rango[0]}** y **{rango[1]}**, se observa una **{signo}** "
-        f"de aproximadamente **{abs(cambio):.2f} millones km²** en la extensión del hielo marino del **{region}**."
-    )
-else:
-    st.info("Selecciona un rango válido para generar el resumen.")
+    with col2:
+        st.markdown("### 🧾 Resumen del período")
+        inicio, fin = df_filtrado["Extensión"].iloc[0], df_filtrado["Extensión"].iloc[-1]
+        cambio = fin - inicio
+        signo = "disminución" if cambio < 0 else "aumento" if cambio > 0 else "estabilidad"
+        media = df_filtrado["Extensión"].mean()
+        valor_min = df_filtrado["Extensión"].min()
+        valor_max = df_filtrado["Extensión"].max()
+        año_min = df_filtrado.loc[df_filtrado["Extensión"].idxmin(), "Año"]
+        año_max = df_filtrado.loc[df_filtrado["Extensión"].idxmax(), "Año"]
+
+        st.markdown(f"""
+        - 📆 **Años:** {rango[0]}–{rango[1]}  
+        - ❄️ **Media:** {media:.2f} millones km²  
+        - 🔽 **Mínimo:** {valor_min:.2f} millones km² (*{int(año_min)}*)  
+        - 🔼 **Máximo:** {valor_max:.2f} millones km² (*{int(año_max)}*)  
+        - 📊 **Cambio total:** {cambio:+.2f} millones km²  
+        - 📈 **Tendencia media:** {coef:.4f} millones km²/año  
+        """)
 
 # ------------------------------------------
 # ANÁLISIS POR DÉCADAS
 # ------------------------------------------
 if mostrar_decadas and not df_filtrado.empty:
-    st.markdown("---")
-    with st.expander("📊 Media de extensión por década", expanded=True):
-        df_decada = df_filtrado.copy()
-        df_decada["Década"] = (df_decada["Año"] // 10) * 10
-        df_grouped = df_decada.groupby("Década")["Extensión"].mean().reset_index()
-
-        st.dataframe(df_grouped.style.format({"Extensión": "{:.2f}"}), use_container_width=True)
-        fig_dec = px.bar(df_grouped, x="Década", y="Extensión", color="Extensión",
-                         color_continuous_scale="Blues",
-                         labels={"Extensión": "Extensión promedio (millones km²)"},
-                         title=f"Media por década ({region})")
-        st.plotly_chart(fig_dec, use_container_width=True)
+    st.subheader("📊 Media de extensión por década")
+    df_decada = df_filtrado.copy()
+    df_decada["Década"] = (df_decada["Año"] // 10) * 10
+    df_grouped = df_decada.groupby("Década")["Extensión"].mean().reset_index()
+    fig_dec = px.bar(df_grouped, x="Década", y="Extensión", color="Extensión",
+                     color_continuous_scale="Blues",
+                     labels={"Extensión": "Extensión promedio (millones km²)"},
+                     title=f"Media por década ({region})")
+    fig_dec.update_layout(xaxis_title_font=dict(size=16), yaxis_title_font=dict(size=16))
+    st.plotly_chart(fig_dec, use_container_width=True)
 
 # ------------------------------------------
 # COMPARATIVA ENTRE REGIONES
 # ------------------------------------------
 if comparar_regiones:
     st.markdown("---")
-    with st.expander("🌐 Comparativa entre regiones polares", expanded=True):
+    with st.expander("🌐 Comparativa entre regiones polares", expanded=False):
         df_comp = cargar_datos_ambos()
         df_comp = df_comp[(df_comp["Año"] >= rango[0]) & (df_comp["Año"] <= rango[1])]
 
@@ -177,57 +189,36 @@ if comparar_regiones:
 # ------------------------------------------
 # CONCLUSIONES AUTOMÁTICAS
 # ------------------------------------------
+st.subheader("🧩 Conclusiones automáticas")
+
 if not df_filtrado.empty and mostrar_tendencia:
-    st.markdown("---")
-    st.subheader("🧩 Conclusiones automáticas")
-
+    color_box = "#006666" if coef < 0 else "#2e8b57" if coef > 0 else "#555555"
     tendencia = "descendente" if coef < 0 else "ascendente" if coef > 0 else "estable"
-    frase_tend = (
-        "📉 **Disminución constante de la extensión del hielo marino.**" if coef < 0 else
-        "📈 **Aumento gradual de la extensión del hielo marino.**" if coef > 0 else
-        "➖ **Sin cambios significativos detectables.**"
-    )
 
-    color_fondo = "#ffcccc" if coef < 0 else "#ccffcc" if coef > 0 else "#e6e6e6"
+    texto = f"""
+    📅 Entre **{rango[0]}** y **{rango[1]}**, la extensión del hielo marino en el **{region}** muestra una tendencia **{tendencia}**.  
+    Esto implica un cambio total de **{cambio:.2f} millones km²**, con una variación media de **{coef:.4f} millones km²/año**.  
+    ❄️ **Estos resultados se alinean con las observaciones satelitales del NSIDC y la NASA.**
+    """
+
     st.markdown(
-        f"""
-        <div style="background-color:{color_fondo}; color:#222; padding:15px; border-radius:12px; border:1px solid #bbb;">
-            <h4>📋 <b>Conclusión Final del Análisis ({rango[0]}–{rango[1]})</b></h4>
-            <ul>
-                <li>La tendencia general en el <b>{region}</b> es <b>{tendencia}</b> ({coef:.4f} millones km²/año).</li>
-                <li>El cambio total observado es de <b>{cambio:.2f} millones km²</b>.</li>
-            </ul>
-            <p>{frase_tend}</p>
-            <p style="font-size:0.9em;">🔮 Estas conclusiones se actualizan automáticamente según la región y rango seleccionados.</p>
-        </div>
-        """,
+        f"<div style='background-color:{color_box};padding:1rem;border-radius:10px;color:white;'>{texto}</div>",
         unsafe_allow_html=True
     )
 
 # ------------------------------------------
-# DESCARGAS SEGURAS
+# DESCARGAS
 # ------------------------------------------
-st.markdown("---")
 st.subheader("💾 Exportar datos y gráficos")
 
 col1, col2 = st.columns(2)
 with col1:
-    try:
-        csv = df_filtrado.to_csv(index=False).encode("utf-8")
-        st.download_button("📄 Descargar CSV", data=csv,
-                           file_name=f"hielo_marino_{region.lower()}.csv", mime="text/csv")
-    except Exception as e:
-        st.error(f"No se pudo generar el CSV: {e}")
-
+    csv = df_filtrado.to_csv(index=False).encode("utf-8")
+    st.download_button("📄 Descargar CSV", data=csv,
+                       file_name=f"hielo_marino_{region.lower()}.csv", mime="text/csv")
 with col2:
-    try:
-        import plotly.io as pio
-        buffer = BytesIO()
-        fig.write_image(buffer, format="png")
-        st.download_button("🖼️ Descargar gráfico (PNG)", data=buffer,
-                           file_name=f"grafico_hielo_{region.lower()}.png", mime="image/png")
-    except Exception:
-        st.warning("⚠️ Kaleido no disponible — descarga HTML interactivo.")
-        html_bytes = fig.to_html().encode("utf-8")
-        st.download_button("🌐 Descargar gráfico (HTML interactivo)",
-                           data=html_bytes, file_name="grafico_interactivo.html", mime="text/html")
+    import plotly.io as pio
+    buffer = BytesIO()
+    fig.write_image(buffer, format="png")
+    st.download_button("🖼️ Descargar gráfico (PNG)", data=buffer,
+                       file_name=f"grafico_hielo_{region.lower()}.png", mime="image/png")

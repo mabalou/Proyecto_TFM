@@ -1,5 +1,5 @@
 # ==========================================
-# 8_Consumo_energético_por_fuente.py — versión final sincronizada con la cabecera global
+# 8_Consumo_energético_por_fuente.py — versión final sincronizada y completa
 # ==========================================
 import streamlit as st
 import pandas as pd
@@ -18,42 +18,29 @@ with st.expander("📘 Acerca de esta sección", expanded=False):
     st.markdown("""
     Analiza la evolución del **consumo mundial de energía por fuente** (carbón, petróleo, gas, renovables, nuclear, hidro, etc.).  
     Incluye línea de tendencia, medias por década, **proyecciones hasta 2100** y **conclusiones automáticas**.  
-    Al final, puedes **exportar** los datos filtrados (CSV) y el gráfico (PNG/HTML).
     """)
 
 # ------------------------------------------
 # FUNCIONES AUXILIARES
 # ------------------------------------------
 def _safe_read_csv(path, **kwargs) -> pd.DataFrame:
+    """Lee un CSV manejando errores comunes de codificación."""
     try:
         return pd.read_csv(path, **kwargs)
     except Exception:
         try:
             return pd.read_csv(path, engine="python", **kwargs)
         except Exception:
-            try:
-                return pd.read_csv(path, comment="#", engine="python", **kwargs)
-            except Exception as e:
-                st.error(f"❌ No se pudo leer el CSV '{path}': {e}")
-                return pd.DataFrame()
-
-NON_ENERGY_COLS = {
-    "country", "country name", "iso_code", "iso code", "iso", "region",
-    "year", "population", "gdp", "continent"
-}
+            return pd.read_csv(path, comment="#", engine="python", **kwargs)
 
 def es_columna_energetica(c: str) -> bool:
+    """Detecta columnas relevantes de consumo energético."""
     c = c.lower()
-    if c in NON_ENERGY_COLS:
+    if c in ["country", "year", "iso_code", "population", "gdp"]:
         return False
-    if any(x in c for x in ["per_capita", "share", "change_pct", "change_twh", "intensity", "pct"]):
+    if any(x in c for x in ["per_capita", "share", "change", "pct"]):
         return False
-    return (
-        c.endswith("_consumption")
-        or c.endswith("_electricity")
-        or c.endswith("_generation")
-        or c in ["renewables_consumption", "fossil_fuel_consumption"]
-    )
+    return "consumption" in c or "electricity" in c
 
 NOMBRES_BONITOS = {
     "coal_consumption": "Carbón (TWh)",
@@ -62,84 +49,36 @@ NOMBRES_BONITOS = {
     "renewables_consumption": "Renovables (TWh)",
     "nuclear_consumption": "Nuclear (TWh)",
     "hydro_consumption": "Hidroeléctrica (TWh)",
-    "biofuel_consumption": "Biocombustibles (TWh)",
-    "solar_consumption": "Solar (TWh)",
     "wind_consumption": "Eólica (TWh)",
-    "electricity_consumption": "Electricidad total (TWh)",
-    "coal_electricity": "Electricidad a partir de carbón (TWh)",
-    "gas_electricity": "Electricidad a partir de gas (TWh)",
-    "oil_electricity": "Electricidad a partir de petróleo (TWh)",
-    "nuclear_electricity": "Electricidad nuclear (TWh)",
-    "hydro_electricity": "Electricidad hidro (TWh)",
-    "wind_electricity": "Electricidad eólica (TWh)",
-    "solar_electricity": "Electricidad solar (TWh)",
-    "biofuel_electricity": "Electricidad biocombustibles (TWh)",
-    "renewables_electricity": "Electricidad renovable (TWh)",
-    "fossil_fuel_consumption": "Fósiles (TWh)",
+    "solar_consumption": "Solar (TWh)",
 }
 
 def nombre_bonito(col: str) -> str:
-    col_l = col.lower()
-    if col_l in NOMBRES_BONITOS:
-        return NOMBRES_BONITOS[col_l]
-    return col_l.replace("_", " ").capitalize() + " (TWh)"
+    return NOMBRES_BONITOS.get(col.lower(), col.replace("_", " ").capitalize() + " (TWh)")
 
 # ------------------------------------------
 # CARGA DE DATOS
 # ------------------------------------------
 @st.cache_data
-def cargar_datos_energia_global():
+def cargar_datos():
     df = _safe_read_csv("data/energia/energy_consuption_by_source.csv")
-    if df.empty:
-        st.stop()
-
     df.columns = df.columns.str.strip().str.lower()
+    df = df.groupby("year").sum(numeric_only=True).reset_index()
+    df_long = df.melt(id_vars="year", var_name="Fuente_raw", value_name="Consumo")
+    df_long = df_long[df_long["Fuente_raw"].apply(es_columna_energetica)]
+    df_long["Año"] = df_long["year"].astype(int)
+    df_long["Fuente"] = df_long["Fuente_raw"].apply(nombre_bonito)
+    df_long = df_long.dropna(subset=["Consumo"])
+    return df_long, sorted(df_long["Fuente"].unique()), (int(df_long["Año"].min()), int(df_long["Año"].max()))
 
-    if "year" not in df.columns:
-        st.error("❌ No se encontró la columna 'year' en el CSV.")
-        st.stop()
-
-    agrupado = df.groupby("year").sum(numeric_only=True).reset_index()
-
-    energy_cols = [c for c in agrupado.columns if es_columna_energetica(c)]
-    if not energy_cols:
-        st.error("❌ No se detectaron columnas energéticas válidas.")
-        st.stop()
-
-    largo = (
-        agrupado[["year"] + energy_cols]
-        .melt(id_vars="year", var_name="Fuente_raw", value_name="Consumo")
-        .dropna()
-    )
-
-    largo["Consumo"] = pd.to_numeric(largo["Consumo"], errors="coerce")
-    largo = largo.dropna(subset=["Consumo"])
-    largo = largo.rename(columns={"year": "Año"})
-    largo["Fuente"] = largo["Fuente_raw"].apply(nombre_bonito)
-
-    mapping_display_to_raw = dict(zip(largo["Fuente"], largo["Fuente_raw"]))
-
-    min_year, max_year = int(largo["Año"].min()), int(largo["Año"].max())
-    default_raw = [
-        "coal_consumption", "oil_consumption", "gas_consumption",
-        "renewables_consumption", "nuclear_consumption", "hydro_consumption"
-    ]
-    defaults_display = [nombre_bonito(c) for c in default_raw if c in energy_cols]
-    if not defaults_display:
-        top_media = (
-            largo.groupby("Fuente")["Consumo"].mean().sort_values(ascending=False).head(5).index.tolist()
-        )
-        defaults_display = top_media
-
-    return largo, sorted(largo["Fuente"].unique().tolist()), defaults_display, (min_year, max_year), mapping_display_to_raw
-
-df_long, fuentes_disponibles, defaults_display, (min_year, max_year), display_to_raw = cargar_datos_energia_global()
+df_long, fuentes_disponibles, (min_year, max_year) = cargar_datos()
 
 # ------------------------------------------
-# FILTROS (compatibles con la cabecera global)
+# ESTADO Y FILTROS
 # ------------------------------------------
 defaults = {
-    "fuentes_sel": defaults_display,
+    "ui_show_filters": False,
+    "fuentes_sel": fuentes_disponibles[:5],
     "rango": (max(1980, min_year), max_year),
     "tipo_grafico": "Línea",
     "usar_escala_log": False,
@@ -147,105 +86,136 @@ defaults = {
     "mostrar_decadas": True,
     "mostrar_prediccion": True,
 }
-
 for k, v in defaults.items():
-    if k not in st.session_state:
-        st.session_state[k] = v
+    st.session_state.setdefault(k, v)
 
-if st.session_state.get("ui_show_filters", False):
+# Asegura que el botón de filtros funcione
+st.session_state.setdefault("ui_show_filters", False)
+
+if st.session_state.ui_show_filters:
     with st.container(border=True):
         st.subheader("⚙️ Filtros de visualización")
-        st.multiselect("Selecciona fuentes energéticas", fuentes_disponibles, key="fuentes_sel", default=defaults_display)
-        st.slider("Selecciona el rango de años", min_year, max_year, st.session_state["rango"], key="rango")
+        st.multiselect("Selecciona fuentes energéticas", fuentes_disponibles, key="fuentes_sel")
+        st.slider("Rango de años", min_year, max_year, st.session_state.rango, key="rango")
         st.selectbox("Tipo de gráfico", ["Línea", "Área (apilada)", "Barras"], key="tipo_grafico")
-        st.checkbox("🧮 Usar escala logarítmica", key="usar_escala_log")
-        st.checkbox("📈 Mostrar línea de tendencia", key="mostrar_tendencia")
-        st.checkbox("📊 Mostrar media por décadas", key="mostrar_decadas")
-        st.checkbox("🔮 Incluir modelo predictivo", key="mostrar_prediccion")
+        st.checkbox("📈 Mostrar línea de tendencia", value=st.session_state.mostrar_tendencia, key="mostrar_tendencia")
+        st.checkbox("📊 Mostrar media por décadas", value=st.session_state.mostrar_decadas, key="mostrar_decadas")
+        st.checkbox("🔮 Incluir modelo predictivo", value=st.session_state.mostrar_prediccion, key="mostrar_prediccion")
+        st.checkbox("🧮 Escala logarítmica", value=st.session_state.usar_escala_log, key="usar_escala_log")
 
-fuentes_sel = st.session_state["fuentes_sel"]
-rango = st.session_state["rango"]
-tipo_grafico = st.session_state["tipo_grafico"]
-usar_escala_log = st.session_state["usar_escala_log"]
-mostrar_tendencia = st.session_state["mostrar_tendencia"]
-mostrar_decadas = st.session_state["mostrar_decadas"]
-mostrar_prediccion = st.session_state["mostrar_prediccion"]
+fuentes_sel = st.session_state.fuentes_sel
+rango = st.session_state.rango
+tipo_grafico = st.session_state.tipo_grafico
+usar_escala_log = st.session_state.usar_escala_log
+mostrar_tendencia = st.session_state.mostrar_tendencia
+mostrar_decadas = st.session_state.mostrar_decadas
+mostrar_prediccion = st.session_state.mostrar_prediccion
 
-# ------------------------------------------
-# FILTRADO
-# ------------------------------------------
-df_f = df_long[(df_long["Fuente"].isin(fuentes_sel)) & (df_long["Año"].between(*rango))].copy()
+df_f = df_long[(df_long["Fuente"].isin(fuentes_sel)) & (df_long["Año"].between(*rango))]
 
 # ------------------------------------------
-# VISUALIZACIÓN PRINCIPAL
+# VISUALIZACIÓN Y RESUMEN LATERAL
 # ------------------------------------------
-titulo = "Evolución del consumo energético por fuente (global)"
-if tipo_grafico == "Línea":
-    fig = px.line(df_f, x="Año", y="Consumo", color="Fuente", markers=True,
-                  labels={"Consumo": "Consumo energético (TWh)", "Año": "Año"}, title=titulo)
-elif tipo_grafico == "Área (apilada)":
-    fig = px.area(df_f, x="Año", y="Consumo", color="Fuente",
-                  labels={"Consumo": "Consumo energético (TWh)", "Año": "Año"}, title=titulo)
+st.subheader("📊 Consumo energético global por fuente")
+
+if df_f.empty:
+    st.info("Selecciona al menos una fuente y un rango válido para visualizar resultados.")
 else:
-    fig = px.bar(df_f, x="Año", y="Consumo", color="Fuente",
-                 labels={"Consumo": "Consumo energético (TWh)", "Año": "Año"}, title=titulo)
+    col1, col2 = st.columns([3, 1], gap="large")
 
-if usar_escala_log:
-    fig.update_yaxes(type="log", title="Consumo energético (escala logarítmica)")
+    with col1:
+        if tipo_grafico == "Línea":
+            fig = px.line(df_f, x="Año", y="Consumo", color="Fuente", markers=True)
+        elif tipo_grafico == "Área (apilada)":
+            fig = px.area(df_f, x="Año", y="Consumo", color="Fuente")
+        else:
+            fig = px.bar(df_f, x="Año", y="Consumo", color="Fuente")
+
+        fig.update_layout(
+            xaxis_title="Año",
+            yaxis_title="Consumo energético (TWh)",
+            xaxis_title_font=dict(size=17),
+            yaxis_title_font=dict(size=17),
+            font=dict(size=15)
+        )
+
+        if usar_escala_log:
+            fig.update_yaxes(type="log")
+
+        tendencias = {}
+        if mostrar_tendencia:
+            for fuente in fuentes_sel:
+                df_src = df_f[df_f["Fuente"] == fuente]
+                if len(df_src) > 1:
+                    x = df_src["Año"].values.reshape(-1, 1)
+                    y = df_src["Consumo"].values
+                    modelo = LinearRegression().fit(x, y)
+                    y_pred = modelo.predict(x)
+                    tendencias[fuente] = modelo.coef_[0]
+                    fig.add_scatter(x=df_src["Año"], y=y_pred, mode="lines", name=f"Tendencia {fuente}",
+                                    line=dict(color="red", dash="dash", width=2))
+        st.plotly_chart(fig, use_container_width=True)
+
+    with col2:
+        st.markdown("### 🧾 Resumen del período")
+        df_periodo = df_f.groupby("Fuente")["Consumo"].mean().sort_values(ascending=False).reset_index()
+        fuente_max = df_periodo.iloc[0]["Fuente"]
+        fuente_min = df_periodo.iloc[-1]["Fuente"]
+        media_total = df_periodo["Consumo"].mean()
+        st.markdown(f"""
+        - 🔝 **Mayor consumo promedio:** {fuente_max}  
+        - 🔻 **Menor consumo promedio:** {fuente_min}  
+        - ⚖️ **Media global del período:** {media_total:,.0f} TWh  
+        - 🗓️ **Período:** {rango[0]}–{rango[1]}  
+        """)
 
 # ------------------------------------------
-# TENDENCIAS
+# MEDIA POR DÉCADAS
 # ------------------------------------------
-tendencias = {}
-if mostrar_tendencia or mostrar_prediccion:
+if mostrar_decadas and not df_f.empty:
+    st.subheader("📊 Media del consumo por década")
+    df_dec = df_f.copy()
+    df_dec["Década"] = (df_dec["Año"] // 10) * 10
+    df_grouped = df_dec.groupby(["Década", "Fuente"])["Consumo"].mean().reset_index()
+    fig_dec = px.bar(df_grouped, x="Década", y="Consumo", color="Fuente", barmode="group",
+                     labels={"Consumo": "Consumo medio (TWh)"})
+    fig_dec.update_layout(xaxis_title_font=dict(size=16), yaxis_title_font=dict(size=16))
+    st.plotly_chart(fig_dec, use_container_width=True)
+
+# ------------------------------------------
+# PROYECCIÓN FUTURA
+# ------------------------------------------
+if mostrar_prediccion and not df_f.empty:
+    st.subheader("🔮 Proyección del consumo energético hasta 2100")
+    fig_pred = px.line(title="Proyección futura del consumo energético")
     for fuente in fuentes_sel:
-        df_src = df_f[df_f["Fuente"] == fuente]
-        if len(df_src) > 1:
+        df_src = df_long[df_long["Fuente"] == fuente]
+        if len(df_src) > 5:
             x = df_src["Año"].values.reshape(-1, 1)
             y = df_src["Consumo"].values
             modelo = LinearRegression().fit(x, y)
-            y_pred = modelo.predict(x)
-            pendientes = modelo.coef_[0]
-            tendencias[fuente] = pendientes
-            if mostrar_tendencia:
-                fig.add_scatter(x=df_src["Año"], y=y_pred, mode="lines", name=f"Tendencia {fuente}",
-                                line=dict(dash="dash", width=2))
-
-st.plotly_chart(fig, use_container_width=True)
-
-# ------------------------------------------
-# RESUMEN AUTOMÁTICO
-# ------------------------------------------
-st.subheader("🧾 Resumen automático del análisis")
-if not df_f.empty:
-    df_reciente = df_f[df_f["Año"] == df_f["Año"].max()]
-    fuente_max = df_reciente.loc[df_reciente["Consumo"].idxmax(), "Fuente"]
-    valor_max = df_reciente["Consumo"].max()
-    st.markdown(f"⚡ En **{int(df_reciente['Año'].max())}**, la fuente con mayor consumo fue **{fuente_max}** con **{valor_max:,.0f} TWh**.")
-else:
-    st.info("Selecciona al menos una fuente y un rango válido para visualizar resultados.")
+            x_pred = np.arange(x.max() + 1, 2101).reshape(-1, 1)
+            y_pred = modelo.predict(x_pred)
+            fig_pred.add_scatter(x=x_pred.flatten(), y=y_pred, mode="lines", name=fuente)
+    st.plotly_chart(fig_pred, use_container_width=True)
 
 # ------------------------------------------
 # CONCLUSIONES AUTOMÁTICAS
 # ------------------------------------------
 if not df_f.empty and tendencias:
-    st.markdown("---")
     st.subheader("🧩 Conclusiones automáticas")
     fuente_top = max(tendencias, key=tendencias.get)
     pendiente_top = tendencias[fuente_top]
     tendencia_txt = "ascendente" if pendiente_top > 0 else "descendente" if pendiente_top < 0 else "estable"
-    color_fondo = "#ffcccc" if pendiente_top > 0 else "#ccffcc" if pendiente_top < 0 else "#e6e6e6"
+    color_box = "#006666" if pendiente_top > 0 else "#2e8b57" if pendiente_top < 0 else "#555555"
 
-    st.markdown(f"""
-    <div style="background-color:{color_fondo}; color:#222;
-                padding:15px; border-radius:12px; border:1px solid #bbb;">
-        <h4>📋 <b>Conclusión final del análisis ({rango[0]}–{rango[1]})</b></h4>
-        <ul>
-            <li>La fuente con <b>mayor variación</b> es <b>{fuente_top}</b>, con una tendencia <b>{tendencia_txt}</b>.</li>
-        </ul>
-        <p>🔮 Estas conclusiones se actualizan automáticamente según el rango y las fuentes seleccionadas.</p>
-    </div>
-    """, unsafe_allow_html=True)
+    texto = f"""
+    ⚡ En el período **{rango[0]}–{rango[1]}**, la fuente con mayor variación es **{fuente_top}**,  
+    mostrando una tendencia **{tendencia_txt}** a lo largo de las décadas.
+    """
+
+    st.markdown(f"<div style='background-color:{color_box};padding:1rem;border-radius:10px;color:white;'>{texto}</div>",
+                unsafe_allow_html=True)
 
 # ------------------------------------------
 # DESCARGAS
@@ -253,14 +223,9 @@ if not df_f.empty and tendencias:
 st.markdown("---")
 st.subheader("💾 Exportar datos y gráficos")
 col1, col2 = st.columns(2)
-
 with col1:
-    try:
-        csv = df_f.to_csv(index=False).encode("utf-8")
-        st.download_button("📄 Descargar CSV", data=csv, file_name="consumo_energetico_filtrado.csv", mime="text/csv")
-    except Exception as e:
-        st.error(f"No se pudo generar el CSV: {e}")
-
+    csv = df_f.to_csv(index=False).encode("utf-8")
+    st.download_button("📄 Descargar CSV", data=csv, file_name="consumo_energetico_filtrado.csv", mime="text/csv")
 with col2:
     try:
         import plotly.io as pio
@@ -269,4 +234,4 @@ with col2:
         st.download_button("🖼️ Descargar gráfico (PNG)", data=buffer, file_name="grafico_consumo_energetico.png", mime="image/png")
     except Exception:
         html_bytes = fig.to_html().encode("utf-8")
-        st.download_button("🌐 Descargar gráfico interactivo (HTML)", data=html_bytes, file_name="grafico_energetico_interactivo.html", mime="text/html")
+        st.download_button("🌐 Descargar gráfico (HTML interactivo)", data=html_bytes, file_name="grafico_energetico.html", mime="text/html")

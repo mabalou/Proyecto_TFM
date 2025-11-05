@@ -108,8 +108,8 @@ st.markdown(f"""
     --bg-color: #0f0f0f;
     --text-color: #f0f0f0;
     --menu-bg: rgba(30,30,30,0.85);
-    --menu-link: #cfdedf;
-    --menu-active: #aeeae1;
+    --menu-link: #bfefff;
+    --menu-active: #00d4b4;
     --toggle-bg: #1e1e1e;
     --toggle-text: #e0e0e0;
     --switch-bg: #3b3b3b;
