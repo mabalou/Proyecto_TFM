@@ -1,9 +1,8 @@
 # ==========================================
-# 00_Inicio.py — versión final (mismo diseño, menú móvil funcional)
+# 00_Inicio.py — versión final responsive (móvil OK sin JS)
 # ==========================================
 import streamlit as st
 from pathlib import Path
-import streamlit.components.v1 as components  # 👈 necesario para JS funcional
 
 st.set_page_config(page_title="🌍 Visualizador climático global del TFM", layout="wide")
 
@@ -101,7 +100,7 @@ light_override = (
 ) if current_theme == "light" else ""
 
 # ----------------------------------------
-# CSS responsive (idéntico al tuyo)
+# CSS responsive (idéntico a tu diseño; añade toggle puro CSS)
 # ----------------------------------------
 st.markdown(f"""
 <style>
@@ -158,7 +157,7 @@ st.markdown(f"""
 }}
 div.block-container {{ padding-top: 7.2rem !important; }}
 
-/* Menú principal */
+/* Menú principal (escritorio) */
 .menu-links {{
     display: flex; flex-wrap: wrap; gap: 1.8rem;
     justify-content: center; align-items: center;
@@ -201,14 +200,16 @@ div.block-container {{ padding-top: 7.2rem !important; }}
 }}
 .pill.is-on .switch::before {{ transform: translateX(24px); }}
 
-/* 🔹 Menú móvil */
+/* 🔹 Toggle móvil SIN JS (checkbox hack) */
+#menuChk {{ display:none; }}            /* oculto siempre */
 .menu-toggle {{
-    display: none;
-    cursor: pointer;
-    font-size: 1.4rem;
-    font-weight: 700;
-    color: var(--menu-active);
-    margin-right: 0.8rem;
+    display:none;                       /* visible solo en móvil */
+    cursor:pointer;
+    font-size:1.4rem;
+    font-weight:700;
+    color:var(--menu-active);
+    margin-right:0.8rem;
+    user-select:none;
 }}
 
 /* Responsive */
@@ -218,43 +219,41 @@ div.block-container {{ padding-top: 7.2rem !important; }}
     align-items: flex-start;
     padding: 0.8rem 1rem;
   }}
-  .menu-toggle {{
-    display: block;
-  }}
+  .menu-toggle {{ display:block; }}
   .menu-links {{
-    display: none;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.6rem;
-    width: 100%;
+    display:none;                       /* cerrado por defecto en móvil */
+    flex-direction:column;
+    align-items:flex-start;
+    gap:0.6rem;
+    width:100%;
+    margin-top:0.6rem;
+    transition:max-height .25s ease;
   }}
-  .menu-links.show {{
-    display: flex;
+  /* cuando el checkbox está marcado, mostramos el menú */
+  #menuChk:checked + label.menu-toggle + .menu-links {{
+    display:flex;
   }}
-  .menu-link {{
-    font-size: 1rem;
-    padding-left: 0.5rem;
-  }}
+  .menu-link {{ font-size:1rem; padding-left:0.5rem; }}
   .tools-wrap {{
-    width: 100%;
-    flex-direction: row;
-    justify-content: flex-end;
-    gap: 10px;
-    margin-top: 0.5rem;
+    width:100%;
+    flex-direction:row;
+    justify-content:flex-end;
+    gap:10px; margin-top:0.5rem;
   }}
-  .pill {{
-    padding: 5px 10px;
-    font-size: 0.9rem;
-  }}
-  div.block-container {{
-    padding-top: 9rem !important;
-  }}
+  .pill {{ padding:5px 10px; font-size:0.9rem; }}
+  div.block-container {{ padding-top: 9rem !important; }}
 }}
 </style>
 
 <div class="header-bar">
-  <span class="menu-toggle" id="menuToggle">☰ Menú</span>
-  <div class="menu-links" id="menuLinks">{menu_html}</div>
+  <!-- checkbox oculto + label = botón ☰ (funciona sin JS) -->
+  <input type="checkbox" id="menuChk" />
+  <label for="menuChk" class="menu-toggle">☰ Menú</label>
+
+  <!-- IMPORTANTE: la caja de enlaces va justo detrás del label
+       para que el selector :checked + label + .menu-links funcione -->
+  <div class="menu-links">{menu_html}</div>
+
   <div class="tools-wrap">
     <a class="pill {'is-on' if current_theme=='light' else ''}" href="{theme_url}" target="_self">
       <span>{'☀️ Modo claro' if current_theme=='light' else '🌙 Modo oscuro'}</span>
@@ -264,23 +263,6 @@ div.block-container {{ padding-top: 7.2rem !important; }}
   </div>
 </div>
 """, unsafe_allow_html=True)
-
-# ✅ Bloque JS seguro (menú móvil funcional)
-components.html("""
-<script>
-const toggle = document.getElementById('menuToggle');
-const menu = document.getElementById('menuLinks');
-if (toggle && menu) {
-  toggle.addEventListener('click', () => {
-    menu.classList.toggle('show');
-  });
-  // cerrar menú al hacer clic en un enlace
-  menu.querySelectorAll('a').forEach(a => {
-    a.addEventListener('click', () => menu.classList.remove('show'));
-  });
-}
-</script>
-""", height=0)
 
 # ----------------------------------------
 # Navegación entre páginas
