@@ -1,14 +1,14 @@
 # ==========================================
-# 00_Inicio.py — versión final pulida (colores corregidos + sin subrayados)
+# 00_Inicio.py — versión final responsive (móvil + escritorio)
 # ==========================================
 import streamlit as st
 from pathlib import Path
 
 st.set_page_config(page_title="🌍 Visualizador climático global del TFM", layout="wide")
 
-# -------------------------------
-# Ocultar sidebar y header nativo
-# -------------------------------
+# ----------------------------------------
+# Ocultar barra lateral y cabecera nativa
+# ----------------------------------------
 st.markdown("""
 <style>
 [data-testid="stSidebar"] {display: none;}
@@ -26,9 +26,9 @@ div.block-container {
 </style>
 """, unsafe_allow_html=True)
 
-# -------------------------------
-# Páginas
-# -------------------------------
+# ----------------------------------------
+# Diccionario de páginas
+# ----------------------------------------
 PAGES = {
     "Inicio": "00_Inicio",
     "Temperatura": "1_Temperatura",
@@ -43,9 +43,9 @@ PAGES = {
     "Mapa global": "10_Mapa_global",
 }
 
-# -------------------------------
-# Estado global (página / tema / filtros)
-# -------------------------------
+# ----------------------------------------
+# Estado global
+# ----------------------------------------
 if "current_page" not in st.session_state:
     st.session_state.current_page = "Inicio"
 if "theme" not in st.session_state:
@@ -64,24 +64,22 @@ if qp.get("filters") is not None:
 current_theme = st.session_state.theme
 other_theme = "light" if current_theme == "dark" else "dark"
 
-# -------------------------------
 # URLs dinámicas
-# -------------------------------
 theme_url = f"?page={st.session_state.current_page}&theme={other_theme}&filters={'1' if st.session_state.ui_show_filters else '0'}"
 filters_url = f"?page={st.session_state.current_page}&theme={current_theme}&filters={'0' if st.session_state.ui_show_filters else '1'}"
 
-# -------------------------------
-# Construir menú
-# -------------------------------
+# ----------------------------------------
+# Construcción del menú
+# ----------------------------------------
 menu_html = ""
 for name, module in PAGES.items():
     active = "active" if name == st.session_state.current_page else ""
     filters_flag = "1" if st.session_state.ui_show_filters else "0"
     menu_html += f'<a class="menu-link {active}" href="?page={name}&theme={current_theme}&filters={filters_flag}" target="_self">{name}</a>'
 
-# -------------------------------
-# Estilos generales (tema claro/oscuro)
-# -------------------------------
+# ----------------------------------------
+# Estilos del tema
+# ----------------------------------------
 light_override = (
     ":root {"
     "--bg-color: #f7f7f5;"
@@ -101,9 +99,9 @@ light_override = (
     "}"
 ) if current_theme == "light" else ""
 
-# -------------------------------
-# CSS visual principal
-# -------------------------------
+# ----------------------------------------
+# CSS responsive completo
+# ----------------------------------------
 st.markdown(f"""
 <style>
 :root {{
@@ -131,20 +129,12 @@ st.markdown(f"""
     transition: background-color .3s ease, color .3s ease;
 }}
 
-/* Colores globales */
-[data-testid="stAppViewContainer"], [data-testid="stMarkdown"], .stText, p, label, h1, h2, h3, h4, h5, h6, span {{
+/* Texto general */
+[data-testid="stAppViewContainer"], p, label, h1, h2, h3, h4, h5, h6, span {{
     color: var(--text-color) !important;
 }}
-[data-baseweb="input"], [data-baseweb="select"], [data-baseweb="slider"], .stMultiSelect, .stSelectbox, .stTextInput input {{
-    color: var(--text-color) !important;
-    background-color: var(--input-bg) !important;
-}}
-[data-testid="stCheckbox"], .stCheckbox, [data-testid="stSliderLabel"] {{
-    color: var(--text-color) !important;
-}}
-[data-testid="stMetricLabel"], [data-testid="stMetricValue"] {{
-    color: var(--metric-text) !important;
-}}
+
+/* Botones */
 [data-testid="stButton"] button, .stButton>button {{
     background-color: var(--button-bg) !important;
     color: var(--button-text) !important;
@@ -167,7 +157,7 @@ st.markdown(f"""
 }}
 div.block-container {{ padding-top: 7.2rem !important; }}
 
-/* Menú */
+/* Menú principal */
 .menu-links {{
     display: flex; flex-wrap: wrap; gap: 1.8rem;
     justify-content: center; align-items: center;
@@ -184,7 +174,7 @@ div.block-container {{ padding-top: 7.2rem !important; }}
     border-bottom: 2px solid var(--menu-active);
 }}
 
-/* Toggles */
+/* Botones toggles */
 .tools-wrap {{
     display: flex; flex-direction: column; gap: 8px; align-items: flex-end;
 }}
@@ -209,9 +199,60 @@ div.block-container {{ padding-top: 7.2rem !important; }}
     transition: transform .25s ease;
 }}
 .pill.is-on .switch::before {{ transform: translateX(24px); }}
+
+/* 🔹 Menú móvil */
+.menu-toggle {{
+    display: none;
+    cursor: pointer;
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--menu-active);
+    margin-right: 0.8rem;
+}}
+
+/* Responsive */
+@media (max-width: 768px) {{
+  .header-bar {{
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 0.8rem 1rem;
+  }}
+  .menu-toggle {{
+    display: block;
+  }}
+  .menu-links {{
+    display: none;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.6rem;
+    width: 100%;
+  }}
+  .menu-links.show {{
+    display: flex;
+  }}
+  .menu-link {{
+    font-size: 1rem;
+    padding-left: 0.5rem;
+  }}
+  .tools-wrap {{
+    width: 100%;
+    flex-direction: row;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 0.5rem;
+  }}
+  .pill {{
+    padding: 5px 10px;
+    font-size: 0.9rem;
+  }}
+  div.block-container {{
+    padding-top: 9rem !important;
+  }}
+}}
 </style>
 
 <div class="header-bar">
+  <span class="menu-toggle" onclick="document.querySelector('.menu-links').classList.toggle('show')">☰ Menú</span>
   <div class="menu-links">{menu_html}</div>
   <div class="tools-wrap">
     <a class="pill {'is-on' if current_theme=='light' else ''}" href="{theme_url}" target="_self">
@@ -223,17 +264,17 @@ div.block-container {{ padding-top: 7.2rem !important; }}
 </div>
 """, unsafe_allow_html=True)
 
-# -------------------------------
-# Navegación a otras páginas
-# -------------------------------
+# ----------------------------------------
+# Navegación entre páginas
+# ----------------------------------------
 selected_module = PAGES[st.session_state.current_page]
 if selected_module != "00_Inicio":
     exec(Path(f"pages/{selected_module}.py").read_text(), globals())
     st.stop()
 
-# -------------------------------
-# Contenido principal de Inicio
-# -------------------------------
+# ----------------------------------------
+# Contenido principal
+# ----------------------------------------
 st.markdown("""
 <div style='text-align:center;margin-top:1.2rem;'>
   <h1 style='font-size:2.3rem;font-weight:800;margin-bottom:0.6rem;'>🌍 Visualizador climático global del TFM</h1>
