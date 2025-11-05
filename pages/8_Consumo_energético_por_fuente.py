@@ -227,11 +227,12 @@ with col1:
     csv = df_f.to_csv(index=False).encode("utf-8")
     st.download_button("📄 Descargar CSV", data=csv, file_name="consumo_energetico_filtrado.csv", mime="text/csv")
 with col2:
-    try:
-        import plotly.io as pio
-        buffer = BytesIO()
-        fig.write_image(buffer, format="png")
-        st.download_button("🖼️ Descargar gráfico (PNG)", data=buffer, file_name="grafico_consumo_energetico.png", mime="image/png")
-    except Exception:
-        html_bytes = fig.to_html().encode("utf-8")
-        st.download_button("🌐 Descargar gráfico (HTML interactivo)", data=html_bytes, file_name="grafico_energetico.html", mime="text/html")
+    import plotly.io as pio
+    # Exportar gráfico como HTML interactivo (compatible con Streamlit Cloud)
+    html_bytes = pio.to_html(fig, full_html=False).encode("utf-8")
+    st.download_button(
+        "🖼️ Descargar gráfico (HTML interactivo)",
+        data=html_bytes,
+        file_name="grafico_energetico.html",
+        mime="text/html"
+    )

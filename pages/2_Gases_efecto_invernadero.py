@@ -226,12 +226,26 @@ en el periodo analizado, contribuyendo {'al incremento del efecto invernadero gl
 # ------------------------------------------
 st.markdown("---")
 st.subheader("💾 Exportar datos y gráficos")
+
 col1, col2 = st.columns(2)
+
 with col1:
     csv = df_filtrado.to_csv(index=False).encode("utf-8")
-    st.download_button("📄 Descargar CSV", data=csv, file_name="gases_filtrados.csv", mime="text/csv")
+    st.download_button(
+        "📄 Descargar CSV",
+        data=csv,
+        file_name="gases_filtrados.csv",
+        mime="text/csv"
+    )
+
 with col2:
     import plotly.io as pio
-    buffer = BytesIO()
-    fig.write_image(buffer, format="png")
-    st.download_button("🖼️ Descargar gráfico (PNG)", data=buffer, file_name="grafico_gases.png", mime="image/png")
+    # Exportar gráfico como HTML interactivo (compatible con Streamlit Cloud)
+    html_bytes = pio.to_html(fig, full_html=False).encode("utf-8")
+    st.download_button(
+        "🖼️ Descargar gráfico (HTML interactivo)",
+        data=html_bytes,
+        file_name="grafico_gases.html",
+        mime="text/html"
+    )
+

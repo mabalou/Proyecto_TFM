@@ -571,14 +571,15 @@ with col1:
 
 with col2:
     if fig_export is not None:
-        try:
-            from io import BytesIO
-            import plotly.io as pio
-            buffer = BytesIO()
-            fig_export.write_image(buffer, format="png")
-            st.download_button("🖼️ Descargar gráfico (PNG)", data=buffer, file_name="grafico_multivariable.png", mime="image/png")
-        except Exception:
-            html_bytes = fig_export.to_html().encode("utf-8")
-            st.download_button("🌐 Descargar gráfico (HTML interactivo)", data=html_bytes, file_name="grafico_multivariable.html", mime="text/html")
+        import plotly.io as pio
+        # Exportar directamente en formato HTML interactivo
+        html_bytes = pio.to_html(fig_export, full_html=False).encode("utf-8")
+        st.download_button(
+            "🖼️ Descargar gráfico (HTML interactivo)",
+            data=html_bytes,
+            file_name="grafico_multivariable.html",
+            mime="text/html"
+        )
     else:
         st.info("⚠️ No hay gráfico disponible para exportar todavía.")
+

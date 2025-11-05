@@ -415,12 +415,12 @@ else:
         except Exception as e:
             st.error(f"No se pudo generar el CSV: {e}")
     with c2:
-        try:
-            import plotly.io as pio
-            from io import BytesIO
-            buffer = BytesIO()
-            fig_map.write_image(buffer, format="png")
-            st.download_button("🖼️ Descargar mapa (PNG)", data=buffer, file_name="mapa_global.png", mime="image/png")
-        except Exception:
-            html_bytes = fig_map.to_html().encode("utf-8")
-            st.download_button("🌐 Descargar mapa (HTML interactivo)", data=html_bytes, file_name="mapa_global.html", mime="text/html")
+        import plotly.io as pio
+        # Exportar el mapa en formato HTML interactivo (compatible con Streamlit Cloud)
+        html_bytes = pio.to_html(fig_map, full_html=False).encode("utf-8")
+        st.download_button(
+            "🖼️ Descargar mapa (HTML interactivo)",
+            data=html_bytes,
+            file_name="mapa_global.html",
+            mime="text/html"
+        )
