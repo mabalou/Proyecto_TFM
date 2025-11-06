@@ -7,6 +7,22 @@ from pathlib import Path
 st.set_page_config(page_title="🌍 Visualizador climático global del TFM", layout="wide")
 
 # ----------------------------------------
+# Animación anti-flash (suaviza carga entre páginas)
+# ----------------------------------------
+st.markdown("""
+<style>
+[data-testid="stAppViewContainer"] {
+    opacity: 0;
+    animation: fadeInSlow 0.3s ease-in forwards;
+}
+@keyframes fadeInSlow {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+</style>
+""", unsafe_allow_html=True)
+
+# ----------------------------------------
 # Ocultar barra lateral y cabecera nativa
 # ----------------------------------------
 st.markdown("""
@@ -100,7 +116,7 @@ light_override = (
 ) if current_theme == "light" else ""
 
 # ----------------------------------------
-# CSS responsive (idéntico a tu diseño; añade toggle puro CSS)
+# CSS responsive + colores del menú (modo oscuro mejorado)
 # ----------------------------------------
 st.markdown(f"""
 <style>
@@ -108,8 +124,8 @@ st.markdown(f"""
     --bg-color: #0f0f0f;
     --text-color: #f0f0f0;
     --menu-bg: rgba(30,30,30,0.85);
-    --menu-link: #bfefff;
-    --menu-active: #00d4b4;
+    --menu-link: #ffffff;      /* 🔹 Enlaces blancos en modo oscuro */
+    --menu-active: #aee0ff;    /* 🔹 Azul claro para hover y activo */
     --toggle-bg: #1e1e1e;
     --toggle-text: #e0e0e0;
     --switch-bg: #3b3b3b;
@@ -166,11 +182,11 @@ div.block-container {{ padding-top: 7.2rem !important; }}
     font-size: 1.05rem; font-weight: 600;
     text-decoration: none !important;
     border-bottom: 2px solid transparent;
-    color: var(--menu-link);
+    color: var(--menu-link) !important;   /* 🔹 Forzamos el blanco */
     transition: all 0.25s ease;
 }}
 .menu-link:hover, .menu-link.active {{
-    color: var(--menu-active);
+    color: var(--menu-active) !important;
     border-bottom: 2px solid var(--menu-active);
 }}
 
@@ -201,9 +217,9 @@ div.block-container {{ padding-top: 7.2rem !important; }}
 .pill.is-on .switch::before {{ transform: translateX(24px); }}
 
 /* 🔹 Toggle móvil SIN JS (checkbox hack) */
-#menuChk {{ display:none; }}            /* oculto siempre */
+#menuChk {{ display:none; }}
 .menu-toggle {{
-    display:none;                       /* visible solo en móvil */
+    display:none;
     cursor:pointer;
     font-size:1.4rem;
     font-weight:700;
@@ -221,7 +237,7 @@ div.block-container {{ padding-top: 7.2rem !important; }}
   }}
   .menu-toggle {{ display:block; }}
   .menu-links {{
-    display:none;                       /* cerrado por defecto en móvil */
+    display:none;
     flex-direction:column;
     align-items:flex-start;
     gap:0.6rem;
@@ -229,7 +245,6 @@ div.block-container {{ padding-top: 7.2rem !important; }}
     margin-top:0.6rem;
     transition:max-height .25s ease;
   }}
-  /* cuando el checkbox está marcado, mostramos el menú */
   #menuChk:checked + label.menu-toggle + .menu-links {{
     display:flex;
   }}
@@ -246,12 +261,8 @@ div.block-container {{ padding-top: 7.2rem !important; }}
 </style>
 
 <div class="header-bar">
-  <!-- checkbox oculto + label = botón ☰ (funciona sin JS) -->
   <input type="checkbox" id="menuChk" />
   <label for="menuChk" class="menu-toggle">☰ Menú</label>
-
-  <!-- IMPORTANTE: la caja de enlaces va justo detrás del label
-       para que el selector :checked + label + .menu-links funcione -->
   <div class="menu-links">{menu_html}</div>
 
   <div class="tools-wrap">

@@ -195,34 +195,59 @@ for k, v in defaults.items():
 if st.session_state.get("ui_show_filters", False):
     with st.container(border=True):
         st.subheader("🎛️ Filtros")
-        c1, c2 = st.columns([2,1])
+        c1, c2 = st.columns([2, 1])
 
         with c1:
-            opciones = list(variables.keys())
-            if not gases_globales.empty:
-                opciones = ["— GASES GLOBALES —", "CO₂ (ppm) — global", "CH₄ (ppb) — global", "N₂O (ppb) — global", "— POR PAÍS —"] + opciones
-            map_var = st.selectbox("Variable a visualizar", options=opciones, index=opciones.index(st.session_state.map_var) if st.session_state.map_var in opciones else 0, key="map_var")
+            tipo_var = st.radio(
+                "Tipo de variable",
+                ["🌍 Gases globales", "🏳️ Variables por país"],
+                horizontal=True,
+                key="tipo_var"
+            )
+
+            if tipo_var == "🌍 Gases globales":
+                gases_opciones = ["CO₂ (ppm) — global", "CH₄ (ppb) — global", "N₂O (ppb) — global"]
+                map_var = st.selectbox(
+                    "Variable global a visualizar",
+                    options=gases_opciones,
+                    index=gases_opciones.index(st.session_state.map_var)
+                    if st.session_state.map_var in gases_opciones else 0,
+                    key="map_var"
+                )
+            else:
+                pais_opciones = list(variables.keys())
+                map_var = st.selectbox(
+                    "Variable por país a visualizar",
+                    options=pais_opciones,
+                    index=pais_opciones.index(st.session_state.map_var)
+                    if st.session_state.map_var in pais_opciones else 0,
+                    key="map_var"
+                )
 
         with c2:
             animate = st.checkbox("🎞️ Animar por años", value=st.session_state.animate, key="animate")
             use_log = st.checkbox("🧮 Escala logarítmica", value=st.session_state.use_log, key="use_log")
 
         # Si la variable es "por país", mostramos selector de países
-        es_global = isinstance(st.session_state.map_var, str) and ("— global" in st.session_state.map_var or "— GASES GLOBALES —" in st.session_state.map_var)
+        es_global = "— global" in st.session_state.map_var
         if not es_global:
-            # candidatos de países de la variable elegida
             dfv = variables.get(st.session_state.map_var, pd.DataFrame(columns=["Country","Year","Value"]))
             paises = sorted(dfv["Country"].unique().tolist()) if not dfv.empty else []
-            st.session_state.countries_sel = st.multiselect("Filtrar países (opcional)", paises, default=st.session_state.countries_sel)
+            st.session_state.countries_sel = st.multiselect(
+                "Filtrar países (opcional)",
+                paises,
+                default=st.session_state.countries_sel
+            )
 
         # Slider de año
-        year = st.slider("Año", min_value=min_year, max_value=max_year, value=min(max_year, max_year), key="year")
+        year = st.slider("Año", min_value=min_year, max_value=max_year, value=max_year, key="year")
 else:
     # Garantiza consistencia interna aunque no se muestren filtros
     map_var = st.session_state.map_var
     animate = st.session_state.animate
     use_log = st.session_state.use_log
     year = st.session_state.year
+
 
 # -------------------------------
 # LÓGICA: Global vs Por País
