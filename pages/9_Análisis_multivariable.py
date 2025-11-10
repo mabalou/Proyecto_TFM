@@ -14,6 +14,23 @@ from sklearn.linear_model import LinearRegression
 st.set_page_config(page_title="🔗 Análisis multivariable", layout="wide")
 st.title("🔗 Análisis multivariable: clima ↔ sociedad")
 
+# --- CSS para mantener los filtros debajo del resumen ---
+st.markdown(
+    """
+    <style>
+    /* Subir bloque derecho (resumen + filtros) */
+    div[data-testid="column"]:nth-of-type(2) {
+        margin-top: -6rem !important;
+    }
+    /* Reducir espacio entre resumen y filtros */
+    div[data-testid="stMarkdown"] + div[data-testid="stMarkdown"] {
+        margin-top: -1.2rem !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
 with st.expander("ℹ️ **Descripción del análisis**", expanded=False):
     st.markdown("""
     En esta sección se realiza un **análisis multivariable** que combina datos
@@ -33,7 +50,6 @@ def _safe_read_csv(path, **kwargs):
     return pd.DataFrame()
 
 def _lin_trend(x_year: pd.Series, y: pd.Series):
-    # Asegura Series numéricas 1D y limpia NaN
     x_clean = pd.to_numeric(pd.Series(x_year).squeeze(), errors="coerce")
     y_clean = pd.to_numeric(pd.Series(y).squeeze(), errors="coerce")
     m = (~x_clean.isna()) & (~y_clean.isna())
@@ -65,8 +81,6 @@ TEAL = "#0d6b6b"
 @st.cache_data
 def load_global_sources():
     dfs = []
-
-    # Temperatura (NASA: media mensual → anual)
     t = _safe_read_csv("data/temperatura/global_temperature_nasa.csv")
     if not t.empty:
         t.columns = t.columns.str.strip()
@@ -86,7 +100,6 @@ def load_global_sources():
         t = pd.DataFrame(columns=["Año", "Temp_anom_C"])
     dfs.append(t)
 
-    # Gases
     def _load_gas(path, out_col):
         df = _safe_read_csv(path, comment="#")
         if df.empty:
@@ -106,7 +119,6 @@ def load_global_sources():
     n2o = _load_gas("data/gases/greenhouse_gas_n2o_global.csv", "N2O_ppb")
     dfs += [co2, ch4, n2o]
 
-    # Nivel del mar
     sl = _safe_read_csv("data/sea_level/sea_level_nasa.csv", skiprows=1, header=None, names=["Fecha", "Nivel_mm"])
     if not sl.empty:
         sl["Fecha"] = pd.to_datetime(sl["Fecha"], errors="coerce")
@@ -115,7 +127,6 @@ def load_global_sources():
         sl = sl.rename(columns={"Nivel_mm": "SeaLevel_mm"})
     dfs.append(sl)
 
-    # Energía (agregado mundial)
     ene = _safe_read_csv("data/energia/energy_consuption_by_source.csv")
     if not ene.empty:
         ene.columns = ene.columns.str.strip().str.lower()
@@ -133,7 +144,6 @@ def load_global_sources():
         ene = ene[["Año"] + [v for v in nice.values() if v in ene.columns]]
     dfs.append(ene)
 
-    # Unión final
     df = None
     for d in dfs:
         if not d.empty and "Año" in d.columns:
@@ -143,11 +153,10 @@ def load_global_sources():
     return df.sort_values("Año").reset_index(drop=True)
 
 # -------------------------------------------------
-# CARGA POR PAÍS (PIB, Población, Emisiones CO2)
+# CARGA POR PAÍS
 # -------------------------------------------------
 @st.cache_data
 def load_country_sources():
-    # PIB
     gdp = _safe_read_csv("data/socioeconomico/gdp_by_country.csv")
     gdp.columns = gdp.columns.str.strip().str.lower()
     rename_gdp = {}
@@ -158,7 +167,6 @@ def load_country_sources():
     gdp = gdp.rename(columns=rename_gdp)
     gdp = gdp[[c for c in ["Año", "País", "PIB_USD"] if c in gdp.columns]].dropna()
 
-    # Población
     pop = _safe_read_csv("data/socioeconomico/population_by_country.csv")
     pop.columns = pop.columns.str.strip().str.lower()
     rename_pop = {}
@@ -169,7 +177,6 @@ def load_country_sources():
     pop = pop.rename(columns=rename_pop)
     pop = pop[[c for c in ["Año", "País", "Población"] if c in pop.columns]].dropna()
 
-    # CO2 por país
     co2c = _safe_read_csv("data/socioeconomico/co2_emissions_by_country.csv")
     co2c.columns = co2c.columns.str.strip().str.lower()
     rename_c = {}
@@ -177,14 +184,14 @@ def load_country_sources():
         rename_c["country name" if "country name" in co2c.columns else "country"] = "País"
     if "year" in co2c.columns: rename_c["year"] = "Año"
     if "value" in co2c.columns: rename_c["value"] = "CO2_Mt"
-    if "co2" in co2c.columns:   rename_c["co2"]   = "CO2_Mt"
+    if "co2" in co2c.columns: rename_c["co2"] = "CO2_Mt"
     co2c = co2c.rename(columns=rename_c)
     co2c = co2c[[c for c in ["Año", "País", "CO2_Mt"] if c in co2c.columns]].dropna()
 
     return gdp, pop, co2c
 
 # -------------------------------------------------
-# ESTADO DE FILTROS (como el resto de páginas)
+# ESTADO DE FILTROS
 # -------------------------------------------------
 st.session_state.setdefault("ui_show_filters", False)
 
@@ -234,12 +241,48 @@ with tab1:
 
         with c1:
             if tipo == "Serie normalizada":
-                z = _zscore(dfg[cols])
-                z["Año"] = dfg["Año"].values
+                # ✅ Copiar solo columnas seleccionadas
+                dfg_plot = dfg[["Año"] + cols].copy()
+
+                # ✅ Agrupar por año (evita efecto escalera si hay varias observaciones por año)
+                dfg_plot = dfg_plot.groupby("Año", as_index=False).mean(numeric_only=True)
+
+                # ✅ Suavizar cada variable individualmente (exactamente igual que en 2_Gases)
+                for c in cols:
+                    dfg_plot[f"{c}_Suavizada"] = (
+                        dfg_plot[c]
+                        .rolling(window=3, center=True, min_periods=1)
+                        .mean()
+                    )
+
+                # ✅ Normalizar (z-score) sobre las columnas suavizadas
+                suav_cols = [f"{c}_Suavizada" for c in cols]
+                z = _zscore(dfg_plot[suav_cols])
+                z["Año"] = dfg_plot["Año"]
+
+                # ✅ Formato largo
                 z = z.melt(id_vars="Año", var_name="Variable", value_name="Z")
-                fig = px.line(z, x="Año", y="Z", color="Variable", markers=True,
-                              labels={"Z": "Valor normalizado (z-score)", "Año": "Año"},
-                              title="Evolución normalizada por variable")
+                z["Variable"] = z["Variable"].str.replace("_Suavizada", "", regex=False)
+
+                # ✅ Colores coherentes
+                color_map = {
+                    "CO2_ppm": "#00BFFF",
+                    "CH4_ppb": "#32CD32",
+                    "N2O_ppb": "#FF6347",
+                    "Temp_anom_C": "#FFA500",
+                    "SeaLevel_mm": "#1E90FF",
+                    "Fossils_TWh": "#FFB6C1",
+                    "Renewables_TWh": "#FF4500"
+                }
+
+                # ✅ Gráfico final
+                fig = px.line(
+                    z, x="Año", y="Z", color="Variable", markers=True,
+                    labels={"Z": "Valor normalizado (z-score)", "Año": "Año"},
+                    title="Evolución normalizada y suavizada por variable",
+                    color_discrete_map=color_map
+                )
+                fig.update_traces(mode="lines+markers", line=dict(width=3))
                 fig = _style_axes(fig)
                 st.plotly_chart(fig, use_container_width=True)
 
@@ -249,9 +292,14 @@ with tab1:
                 else:
                     xvar, yvar = cols[0], cols[1]
                     df2 = dfg.dropna(subset=[xvar, yvar]).copy()
-                    fig = px.scatter(df2, x=xvar, y=yvar,
-                                     labels={xvar: xvar, yvar: yvar},
-                                     title=f"Relación {yvar} vs {xvar}")
+                    fig = px.scatter(
+                        df2, x=xvar, y=yvar,
+                        color_discrete_sequence=["#00BFFF"],
+                        labels={xvar: xvar, yvar: yvar},
+                        title=f"Relación entre {yvar} y {xvar}"
+                    )
+                    fig.update_traces(name=f"{yvar} vs {xvar}", showlegend=True)
+
                     m, model = _lin_trend(df2[xvar], df2[yvar])
                     if model is not None:
                         xx = np.linspace(df2[xvar].min(), df2[xvar].max(), 100)
@@ -305,17 +353,49 @@ with tab1:
         # Si hay varias variables, usamos el promedio de las seleccionadas
         pred_series = dfg[cols].apply(pd.to_numeric, errors="coerce").mean(axis=1)
         valid = (~dfg["Año"].isna()) & (~pred_series.isna())
+
         if valid.sum() >= 3:
             X = dfg.loc[valid, "Año"].values.reshape(-1, 1)
             Y = pred_series.loc[valid].values
-            model = LinearRegression().fit(X, Y)
+
+            # Modelo lineal
+            modelo = LinearRegression().fit(X, Y)
             x_pred = np.arange(int(dfg["Año"].max()) + 1, 2101).reshape(-1, 1)
-            y_pred = model.predict(x_pred)
-            fig_pred = px.line(x=x_pred.ravel(), y=y_pred,
-                               labels={"x": "Año", "y": f"Proyección ({'promedio' if len(cols)>1 else cols[0]})"},
-                               title=f"Predicción hasta 2100 ({'promedio de variables seleccionadas' if len(cols)>1 else cols[0]})")
+            y_pred = modelo.predict(x_pred)
+
+            # Intervalo de confianza (95 %)
+            resid = Y - modelo.predict(X)
+            s = np.std(resid)
+            y_upper = y_pred + 1.96 * s
+            y_lower = y_pred - 1.96 * s
+
+            # Gráfico principal
+            fig_pred = px.line(
+                x=x_pred.ravel(),
+                y=y_pred,
+                labels={"x": "Año", "y": f"Proyección ({'promedio' if len(cols) > 1 else cols[0]})"},
+                title=f"Predicción hasta 2100 ({'promedio de variables seleccionadas' if len(cols) > 1 else cols[0]})"
+            )
+
+            # Añadir bandas de confianza
+            fig_pred.add_scatter(
+                x=x_pred.ravel(), y=y_upper,
+                mode="lines",
+                line=dict(color="cyan", width=1),
+                name="IC 95 % (superior)"
+            )
+            fig_pred.add_scatter(
+                x=x_pred.ravel(), y=y_lower,
+                mode="lines",
+                fill="tonexty", fillcolor="rgba(0,191,255,0.2)",
+                line=dict(color="cyan", width=1),
+                name="IC 95 % (inferior)"
+            )
+
             fig_pred = _style_axes(fig_pred)
             st.plotly_chart(fig_pred, use_container_width=True)
+
+            st.success("🌡️ El modelo predice una **tendencia lineal** hacia 2100 con un **intervalo de confianza del 95 %**.")
         else:
             st.info("Datos insuficientes para proyectar.")
 
