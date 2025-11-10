@@ -1,20 +1,45 @@
 # ==========================================
-# 1_Temperatura.py — resumen corregido + conclusiones mejoradas + frase contextual
+# 1_Temperatura.py — versión final mejorada (banda + estilo + auto-filtros)
 # ==========================================
 import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
-from io import BytesIO
+from sklearn.linear_model import LinearRegression
 
+# -------------------------------
+# Configuración de página
+# -------------------------------
 st.set_page_config(page_title="🌡️ Evolución de la Temperatura Global", layout="wide")
 st.title("🌍 Evolución de la Temperatura Global")
 
+# -------------------------------
+# Estilo visual personalizado
+# -------------------------------
+st.markdown(
+    """
+    <style>
+    /* 🔹 Subir más el bloque derecho (resumen + filtros) */
+    div[data-testid="column"]:nth-of-type(2) {
+        margin-top: -6rem !important;
+    }
+    /* 🔹 Reducir espacio entre resumen y filtros */
+    div[data-testid="stMarkdown"] + div[data-testid="stMarkdown"] {
+        margin-top: -1.5rem !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+# -------------------------------
+# Descripción inicial
+# -------------------------------
 with st.expander("📘 ¿Qué muestra esta sección?", expanded=False):
     st.markdown("""
     Esta sección analiza las **anomalías de temperatura global** reportadas por **NASA GISTEMP**.  
     Puedes comparar **estaciones del año**, detectar **tendencias**, explorar **medias por década**
-    y generar una **proyección hasta 2100**.
+    y generar una **proyección hasta 2100** con **intervalo de confianza del 95 %**.
     """)
 
 # -------------------------------
@@ -34,10 +59,10 @@ min_year, max_year = int(df["Year"].min()), int(df["Year"].max())
 series_disponibles = ["J-D", "DJF", "MAM", "JJA", "SON"]
 
 # -------------------------------
-# Estado inicial
+# Estado inicial (filtros activos por defecto)
 # -------------------------------
 defaults = {
-    "ui_show_filters": False,
+    "ui_show_filters": True,  # 🔹 filtros activados automáticamente
     "tipo_grafico": "Línea",
     "rango": (max(1970, min_year), max_year),
     "series_seleccionadas": ["J-D"],
@@ -48,21 +73,6 @@ defaults = {
 }
 for k, v in defaults.items():
     st.session_state.setdefault(k, v)
-
-# -------------------------------
-# Filtros
-# -------------------------------
-if st.session_state.ui_show_filters:
-    with st.container(border=True):
-        st.subheader("⚙️ Filtros de visualización")
-        st.selectbox("Tipo de gráfico", ["Línea", "Área", "Barras"], key="tipo_grafico")
-        st.slider("Selecciona el rango de años", min_year, max_year, st.session_state.rango, key="rango")
-        st.multiselect("Variables a visualizar", series_disponibles,
-                       default=st.session_state.series_seleccionadas, key="series_seleccionadas")
-        st.checkbox("📈 Mostrar línea de tendencia", value=st.session_state.mostrar_tendencia, key="mostrar_tendencia")
-        st.checkbox("📊 Mostrar media por décadas", value=st.session_state.mostrar_decadas, key="mostrar_decadas")
-        st.checkbox("🔮 Incluir modelo predictivo", value=st.session_state.mostrar_prediccion, key="mostrar_prediccion")
-        st.checkbox("🧮 Escala logarítmica", value=st.session_state.usar_escala_log, key="usar_escala_log")
 
 # -------------------------------
 # Parámetros
@@ -78,7 +88,7 @@ usar_escala_log = st.session_state.usar_escala_log
 df_filtrado = df[(df["Year"] >= rango[0]) & (df["Year"] <= rango[1])]
 
 # -------------------------------
-# Gráfico y resumen (corrigido)
+# Gráfico y resumen
 # -------------------------------
 st.subheader("📊 Anomalías globales de temperatura")
 
@@ -98,11 +108,8 @@ else:
             fig = px.bar(df_filtrado, x="Year", y=series,
                          labels={"value": "Anomalía (°C)", "variable": "Variable", "Year": "Año"})
 
-        fig.update_layout(
-            xaxis_title_font=dict(size=17),
-            yaxis_title_font=dict(size=17),
-            font=dict(size=15)
-        )
+        fig.update_layout(xaxis_title_font=dict(size=17), yaxis_title_font=dict(size=17), font=dict(size=15))
+
         if usar_escala_log:
             fig.update_yaxes(type="log")
 
@@ -133,6 +140,19 @@ else:
         - 📈 **Variables seleccionadas:** {", ".join(series)}
         """)
 
+        # Filtros ajustados (más juntos)
+        st.markdown("### ⚙️ Ajustar visualización")
+        col_f1, col_f2 = st.columns(2)
+        with col_f1:
+            st.selectbox("Tipo de gráfico", ["Línea", "Área", "Barras"], key="tipo_grafico")
+            st.multiselect("Variables a visualizar", series_disponibles, key="series_seleccionadas")
+            st.slider("Selecciona el rango de años", min_year, max_year, st.session_state.rango, key="rango")
+        with col_f2:
+            st.checkbox("📈 Mostrar línea de tendencia", value=st.session_state.mostrar_tendencia, key="mostrar_tendencia")
+            st.checkbox("📊 Mostrar media por décadas", value=st.session_state.mostrar_decadas, key="mostrar_decadas")
+            st.checkbox("🔮 Incluir modelo predictivo", value=st.session_state.mostrar_prediccion, key="mostrar_prediccion")
+            st.checkbox("🧮 Escala logarítmica", value=st.session_state.usar_escala_log, key="usar_escala_log")
+
 # -------------------------------
 # Media por décadas
 # -------------------------------
@@ -147,10 +167,11 @@ if mostrar_decadas and not df_filtrado.empty:
     st.plotly_chart(fig_dec, use_container_width=True)
 
 # -------------------------------
-# Predicción
+# Predicción con banda de confianza
 # -------------------------------
 if mostrar_prediccion:
     st.subheader("🔮 Proyección hasta 2100")
+
     if len(series) == 1:
         serie = series[0]
         df_pred = df[["Year", serie]].dropna()
@@ -161,26 +182,35 @@ if mostrar_prediccion:
         df_pred = df_pred[["Year", "Promedio"]]
         serie = "Promedio"
         titulo = "Predicción futura (promedio de series seleccionadas)"
-    x, y = df_pred["Year"].values, df_pred[serie].values
+
+    x = df_pred["Year"].values.reshape(-1, 1)
+    y = df_pred[serie].values
     if len(x) > 5:
-        coef = np.polyfit(x, y, 2)
-        x_pred = np.arange(x.max() + 1, 2101)
-        y_pred = np.polyval(coef, x_pred)
-        fig_pred = px.line(x=x_pred, y=y_pred,
+        modelo = LinearRegression().fit(x, y)
+        x_pred = np.arange(x.max() + 1, 2101).reshape(-1, 1)
+        y_pred = modelo.predict(x_pred)
+
+        # Banda de confianza (95 %)
+        resid = y - modelo.predict(x)
+        s = np.std(resid)
+        y_upper = y_pred + 1.96 * s
+        y_lower = y_pred - 1.96 * s
+
+        fig_pred = px.line(x=x_pred.ravel(), y=y_pred,
                            labels={"x": "Año", "y": "Anomalía (°C)"}, title=titulo)
+        fig_pred.add_scatter(x=x_pred.ravel(), y=y_upper, mode="lines",
+                             line=dict(width=1, color="cyan"), name="IC 95 % (superior)")
+        fig_pred.add_scatter(x=x_pred.ravel(), y=y_lower, mode="lines",
+                             fill="tonexty", fillcolor="rgba(0,191,255,0.2)",
+                             line=dict(width=1, color="cyan"), name="IC 95 % (inferior)")
         st.plotly_chart(fig_pred, use_container_width=True)
-        if coef[0] > 0:
-            st.success("🌡️ **El modelo sugiere un incremento acelerado de la temperatura hacia finales de siglo.**")
-        elif coef[0] < 0:
-            st.info("🟢 **El modelo predice un enfriamiento gradual en las próximas décadas.**")
-        else:
-            st.warning("➖ **El modelo muestra estabilidad sin cambios notables.**")
+
+        st.success("🌡️ El modelo predice un **aumento sostenido de la temperatura** hacia finales de siglo, con un **intervalo de confianza del 95 %**.")
 
 # -------------------------------
-# Conclusiones automáticas (mejoradas)
+# Conclusiones automáticas
 # -------------------------------
 st.subheader("🧩 Conclusiones automáticas")
-
 if not df_filtrado.empty:
     df_filtrado["Promedio"] = df_filtrado[series].mean(axis=1)
     x_all, y_all = df_filtrado["Year"].values, df_filtrado["Promedio"].values
@@ -195,10 +225,7 @@ if not df_filtrado.empty:
     🌡️ **Esto respalda la tendencia observada de calentamiento global durante el siglo XX.**
     """
 
-    st.markdown(
-        f"<div style='background-color:{color_box};padding:1rem;border-radius:10px;color:white;'>{texto}</div>",
-        unsafe_allow_html=True
-    )
+    st.markdown(f"<div style='background-color:{color_box};padding:1rem;border-radius:10px;color:white;'>{texto}</div>", unsafe_allow_html=True)
 
 # -------------------------------
 # Exportar

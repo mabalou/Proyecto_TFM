@@ -82,7 +82,7 @@ def _normaliza(df: pd.DataFrame, country_key=("country name","country"), year_ke
     return out
 
 # -------------------------------
-# Carga de datos (según tus CSV)
+# Carga de datos 
 # -------------------------------
 @st.cache_data
 def load_all_sources():

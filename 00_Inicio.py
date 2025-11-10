@@ -67,7 +67,7 @@ if "current_page" not in st.session_state:
 if "theme" not in st.session_state:
     st.session_state.theme = "dark"
 if "ui_show_filters" not in st.session_state:
-    st.session_state.ui_show_filters = False
+    st.session_state.ui_show_filters = True
 
 qp = st.query_params
 if qp.get("page") in PAGES:
