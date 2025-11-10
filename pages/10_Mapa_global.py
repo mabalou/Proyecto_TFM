@@ -179,14 +179,15 @@ if not variables and gases_globales.empty:
 # -------------------------------
 # Estado inicial y Filtros (integrado con el header)
 # -------------------------------
-# Defaults robustos
 defaults = {
-    "map_var": next(iter(variables.keys())) if variables else "CO₂ (ppm) — global",
+    # Si hay gases globales disponibles, empezamos en CO₂ global
+    "map_var": "CO₂ (ppm) — global" if True else next(iter(variables.keys())),
     "year": max_year,
     "animate": False,
     "use_log": False,
     "countries_sel": [],
     "show_global_series": False,  # para gases globales
+    "tipo_var": "🌍 Gases globales",  # nuevo: garantiza coherencia visual
 }
 for k, v in defaults.items():
     st.session_state.setdefault(k, v)
@@ -227,20 +228,35 @@ if st.session_state.get("ui_show_filters", False):
         with c2:
             animate = st.checkbox("🎞️ Animar por años", value=st.session_state.animate, key="animate")
             use_log = st.checkbox("🧮 Escala logarítmica", value=st.session_state.use_log, key="use_log")
-
-        # Si la variable es "por país", mostramos selector de países
+        # Si la variable es "por país", mostramos selector de países (corregido y estable)
         es_global = "— global" in st.session_state.map_var
+
+        # 🔹 Asegura que siempre exista la clave countries_sel
+        if "countries_sel" not in st.session_state:
+            st.session_state.countries_sel = []
+
         if not es_global:
-            dfv = variables.get(st.session_state.map_var, pd.DataFrame(columns=["Country","Year","Value"]))
+            # --- Variables por país ---
+            dfv = variables.get(st.session_state.map_var, pd.DataFrame(columns=["Country", "Year", "Value"]))
             paises = sorted(dfv["Country"].unique().tolist()) if not dfv.empty else []
-            st.session_state.countries_sel = st.multiselect(
+
+            # Filtra selección previa: elimina países no disponibles
+            prev_sel = [p for p in st.session_state.get("countries_sel", []) if p in paises]
+
+            st.multiselect(
                 "Filtrar países (opcional)",
                 paises,
-                default=st.session_state.countries_sel
+                key="countries_sel",
+                default=prev_sel,
             )
+        else:
+            # --- Gases globales ---
+            # Limpia selección de países al cambiar a vista global (sin romper estado)
+            st.session_state.countries_sel = []
 
-        # Slider de año
+        # Slider de año (siempre visible)
         year = st.slider("Año", min_value=min_year, max_value=max_year, value=max_year, key="year")
+
 else:
     # Garantiza consistencia interna aunque no se muestren filtros
     map_var = st.session_state.map_var
@@ -269,43 +285,176 @@ def _fmt_value(var_name: str, v: float) -> str:
 
 # ------------- Caso A: GASES GLOBALES -------------
 if isinstance(st.session_state.map_var, str) and "— global" in st.session_state.map_var:
-    label = st.session_state.map_var.replace(" — global", "")
-    g = gases_globales[gases_globales["Label"] == label.replace(" (ppm)", "").replace(" (ppb)", "")] if " (" in label else gases_globales[gases_globales["Label"] == label]
-    if g.empty:
-        st.info("No hay datos globales para esta serie.")
+    # Detectamos qué gas se seleccionó
+    label = st.session_state.map_var.replace("— global", "").replace("- global", "").strip()
+    if "CO₂" in label or "CO2" in label:
+        path = "data/gases/greenhouse_gas_co2_global.csv"
+        unidad = "ppm"
+    elif "CH₄" in label or "CH4" in label:
+        path = "data/gases/greenhouse_gas_ch4_global.csv"
+        unidad = "ppb"
     else:
-        st.subheader(f"{label} — Serie temporal global")
-        fig = px.line(g, x="Year", y="Value", markers=True, labels={"Year":"Año","Value":label})
-        if use_log:
-            fig.update_yaxes(type="log")
+        path = "data/gases/greenhouse_gas_n2o_global.csv"
+        unidad = "ppb"
+
+    # Leer CSV local
+    df = _safe_read_csv(path, comment="#")
+    if df.empty:
+        st.warning(f"No se pudo leer el archivo: {path}")
+        st.stop()
+
+    # Intentar localizar columna de valores
+    df.columns = df.columns.str.strip().str.lower()
+    val_col = None
+    for cand in ["average", "trend", "value", "global"]:
+        if cand in df.columns:
+            val_col = cand
+            break
+    if val_col is None:
+        st.warning(f"No se encontró columna de valores en {path}")
+        st.stop()
+
+    # Normalizar columnas
+    df = df.rename(columns={"year": "Year", val_col: "Value"})[["Year", "Value"]]
+    df["Year"] = pd.to_numeric(df["Year"], errors="coerce")
+    df["Value"] = pd.to_numeric(df["Value"], errors="coerce")
+    df = df.dropna()
+
+    if df.empty:
+        st.info("No hay datos válidos para esta serie global.")
+        st.stop()
+
+    # 🔹 Año seleccionado desde el slider
+    selected_year = st.session_state.year
+    # Buscar valor del año seleccionado o el más cercano
+    if selected_year not in df["Year"].values:
+        closest_year = df.iloc[(df["Year"] - selected_year).abs().argsort().iloc[0]]["Year"]
+    else:
+        closest_year = selected_year
+
+    val_actual = df.loc[df["Year"] == closest_year, "Value"].iloc[0]
+    val_inicial = df.loc[df["Year"] == df["Year"].min(), "Value"].iloc[0]
+    variacion = ((val_actual - val_inicial) / val_inicial) * 100
+
+    # Crear "globo" coloreado (simbólico): todos los países con el valor de ese año
+    world = px.data.gapminder().query("year == 2007")[["country"]].drop_duplicates()
+    world["Value"] = val_actual
+
+    st.subheader(f"{label} — Concentración global ({unidad})")
+    c1, c2 = st.columns([3, 1], gap="large")
+
+    with c1:
+        fig = px.choropleth(
+            world,
+            locations="country",
+            locationmode="country names",
+            color="Value",
+            color_continuous_scale="Viridis",
+            range_color=[df["Value"].min(), df["Value"].max()],
+            labels={"Value": f"{label} ({unidad})"},
+            title=None
+        )
+        fig.update_layout(margin=dict(l=0, r=0, t=0, b=0))
         st.plotly_chart(fig, use_container_width=True)
 
-        # Resumen
-        g_year = g[g["Year"] == min(max_year, st.session_state.year)]
-        if not g_year.empty:
-            val = g_year["Value"].iloc[0]
-            st.success(f"📅 En **{int(st.session_state.year)}**, el valor de **{label}** fue **{_fmt_value(label, val)}**.")
+    with c2:
+        st.markdown("### 🧾 Resumen")
+        st.markdown(f"""
+        - 📆 **Año seleccionado:** {int(closest_year)}  
+        - 🌍 **Valor global:** {val_actual:.2f} {unidad}  
+        - 📉 **Cambio desde {int(df['Year'].min())}:** {variacion:+.1f}%
+        """)
 
-        # Exportaciones sencillas
-        st.markdown("---")
-        st.subheader("💾 Exportar")
-        c1, c2 = st.columns(2)
-        with c1:
-            try:
-                csv = g.to_csv(index=False).encode("utf-8")
-                st.download_button("📄 Descargar datos (CSV)", data=csv, file_name=f"{label}_global.csv", mime="text/csv")
-            except Exception as e:
-                st.error(f"No se pudo exportar CSV: {e}")
-        with c2:
-            try:
-                from io import BytesIO
-                import plotly.io as pio
-                buffer = BytesIO()
-                fig.write_image(buffer, format="png")
-                st.download_button("🖼️ Descargar gráfico (PNG)", data=buffer, file_name=f"{label}_global.png", mime="image/png")
-            except Exception:
-                html_bytes = fig.to_html().encode("utf-8")
-                st.download_button("🌐 Descargar gráfico (HTML interactivo)", data=html_bytes, file_name=f"{label}_global.html", mime="text/html")
+    # ==============================================================
+    # 📈 Serie temporal global (normalizada y suavizada)
+    # ==============================================================
+    st.subheader("📈 Serie temporal global (normalizada y suavizada)")
+
+    df_norm = df.copy()
+    # Normalizar entre 0–1
+    df_norm["Norm"] = (df_norm["Value"] - df_norm["Value"].min()) / (df_norm["Value"].max() - df_norm["Value"].min())
+    # Agrupar por año por si hay duplicados
+    df_norm = df_norm.groupby("Year", as_index=False)["Norm"].mean()
+
+    # Interpolar para suavizar años faltantes
+    df_norm = df_norm.set_index("Year").reindex(
+        range(int(df_norm["Year"].min()), int(df_norm["Year"].max()) + 1)
+    )
+    df_norm["Norm"] = df_norm["Norm"].interpolate(method="linear")
+
+    # Suavizado adicional (ventana móvil)
+    df_norm["Suavizada"] = df_norm["Norm"].rolling(window=5, center=True, min_periods=1).mean()
+    df_norm = df_norm.reset_index().rename(columns={"index": "Year"})
+
+    # Crear gráfico (mismo estilo que en gases)
+    fig_line = px.line(
+        df_norm,
+        x="Year",
+        y="Suavizada",
+        title=f"Evolución normalizada de {label}",
+        labels={"Year": "Año", "Suavizada": "Proporción relativa (0–1)"},
+        color_discrete_sequence=["#00BFFF"]
+    )
+
+    # Añadir punto del año seleccionado
+    y_point = df_norm.loc[df_norm["Year"] == closest_year, "Suavizada"].iloc[0]
+    fig_line.add_scatter(
+        x=[closest_year],
+        y=[y_point],
+        mode="markers+text",
+        text=["Año seleccionado"],
+        textposition="top center",
+        marker=dict(color="red", size=10),
+        name="Año actual"
+    )
+
+    # Tendencia lineal (ajustada como en gases)
+    from sklearn.linear_model import LinearRegression
+    x = df_norm["Year"].values.reshape(-1, 1)
+    y = df_norm["Suavizada"].values
+    modelo = LinearRegression().fit(x, y)
+    y_pred = modelo.predict(x)
+    fig_line.add_scatter(
+        x=df_norm["Year"],
+        y=y_pred,
+        mode="lines",
+        line=dict(color="orange", dash="dash"),
+        name="Tendencia"
+    )
+
+    # Estilo coherente con los otros módulos
+    fig_line.update_layout(
+        template="plotly_dark",
+        font=dict(size=15),
+        xaxis_title_font=dict(size=16),
+        yaxis_title_font=dict(size=16),
+        legend_title_text="Indicador"
+    )
+    st.plotly_chart(fig_line, use_container_width=True)
+
+    # ==============================================================
+    # 💾 Exportaciones
+    # ==============================================================
+    st.markdown("---")
+    st.subheader("💾 Exportar")
+    c1, c2 = st.columns(2)
+    with c1:
+        csv = df.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            "📄 Descargar datos (CSV)",
+            data=csv,
+            file_name=f"{label.replace(' ', '_')}_global.csv",
+            mime="text/csv"
+        )
+    with c2:
+        import plotly.io as pio
+        html_bytes = pio.to_html(fig_line, full_html=False).encode("utf-8")
+        st.download_button(
+            "🖼️ Descargar gráfico (HTML interactivo)",
+            data=html_bytes,
+            file_name=f"{label.replace(' ', '_')}_global.html",
+            mime="text/html"
+        )
 
 # ------------- Caso B: INDICADORES POR PAÍS -------------
 else:
