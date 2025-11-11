@@ -183,19 +183,20 @@ else:
         - 📈 **Tendencia:** {coef:+.4f} millones km²/año  
         """)
 
-        # Filtros compactos debajo del resumen
-        st.markdown("### ⚙️ Ajustar visualización")
-        colf1, colf2 = st.columns(2)
-        with colf1:
-            st.selectbox("🌍 Región", ["Ártico", "Antártico"], key="region")
-            st.selectbox("Tipo de gráfico", ["Línea", "Área", "Barras"], key="tipo_grafico")
-            st.slider("Rango de años", min_year, max_year, st.session_state.rango, key="rango")
-        with colf2:
-            st.checkbox("📈 Mostrar tendencia", value=st.session_state.mostrar_tendencia, key="mostrar_tendencia")
-            st.checkbox("📊 Media por décadas", value=st.session_state.mostrar_decadas, key="mostrar_decadas")
-            st.checkbox("🔮 Predicción hasta 2100", value=st.session_state.mostrar_prediccion, key="mostrar_prediccion")
-            st.checkbox("🌐 Comparar regiones", value=st.session_state.comparar_regiones, key="comparar_regiones")
-            st.number_input("Ventana de suavizado", 1, 11, value=window_roll, step=2, key="window_roll")
+        # 🔧 Filtros compactos debajo del resumen (compatibles con el botón del header)
+        if st.session_state.get("ui_show_filters", True):
+            st.markdown("### ⚙️ Ajustar visualización")
+            colf1, colf2 = st.columns(2)
+            with colf1:
+                st.selectbox("🌍 Región", ["Ártico", "Antártico"], key="region")
+                st.selectbox("Tipo de gráfico", ["Línea", "Área", "Barras"], key="tipo_grafico")
+                st.slider("Rango de años", min_year, max_year, st.session_state.rango, key="rango")
+            with colf2:
+                st.checkbox("📈 Mostrar tendencia", value=st.session_state.mostrar_tendencia, key="mostrar_tendencia")
+                st.checkbox("📊 Media por décadas", value=st.session_state.mostrar_decadas, key="mostrar_decadas")
+                st.checkbox("🔮 Predicción hasta 2100", value=st.session_state.mostrar_prediccion, key="mostrar_prediccion")
+                st.checkbox("🌐 Comparar regiones", value=st.session_state.comparar_regiones, key="comparar_regiones")
+                st.number_input("Ventana de suavizado", 1, 11, value=window_roll, step=2, key="window_roll")
 
 # ------------------------------------------
 # ANÁLISIS POR DÉCADAS

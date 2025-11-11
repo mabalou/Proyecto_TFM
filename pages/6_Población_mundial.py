@@ -141,13 +141,19 @@ else:
         - 🧭 **Países analizados:** {", ".join(paises_sel)}  
         """)
 
-        st.markdown("### ⚙️ Ajustar visualización")
-        st.multiselect("🌍 Selecciona países o regiones", paises, default=paises_sel, key="paises_seleccionados")
-        st.slider("📆 Rango de años", min_year, max_year, st.session_state.rango, key="rango")
-        st.selectbox("📊 Tipo de gráfico", ["Línea", "Área", "Barras"], key="tipo_grafico")
-        st.checkbox("📈 Mostrar tendencia", value=mostrar_tendencia, key="mostrar_tendencia")
-        st.checkbox("📊 Media por décadas", value=mostrar_decadas, key="mostrar_decadas")
-        st.checkbox("🔮 Incluir modelo predictivo", value=mostrar_prediccion, key="mostrar_prediccion")
+        # 🔧 Filtros debajo del resumen (compatibles con el botón del header)
+        if st.session_state.get("ui_show_filters", True):
+            st.markdown("### ⚙️ Ajustar visualización")
+            colf1, colf2 = st.columns(2)
+            with colf1:
+                st.multiselect("🌍 Selecciona países o regiones", paises, default=paises_sel, key="paises_seleccionados")
+                st.slider("📆 Rango de años", min_year, max_year, st.session_state.rango, key="rango")
+                st.selectbox("📊 Tipo de gráfico", ["Línea", "Área", "Barras"], key="tipo_grafico")
+            with colf2:
+                st.checkbox("📈 Mostrar tendencia", value=mostrar_tendencia, key="mostrar_tendencia")
+                st.checkbox("📊 Media por décadas", value=mostrar_decadas, key="mostrar_decadas")
+                st.checkbox("🔮 Incluir modelo predictivo", value=mostrar_prediccion, key="mostrar_prediccion")
+                st.checkbox("🧮 Escala logarítmica", value=usar_escala_log, key="usar_escala_log")
 
 # ------------------------------------------
 # MEDIA POR DÉCADAS

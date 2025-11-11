@@ -162,19 +162,20 @@ else:
         - 🗓️ **Período:** {rango[0]}–{rango[1]}  
         """)
 
-        # Filtros debajo del resumen
-        st.markdown("### ⚙️ Ajustar visualización")
-        col_f1, col_f2 = st.columns(2)
-        with col_f1:
-            st.multiselect("Fuentes energéticas", fuentes_disponibles, key="fuentes_sel")
-            st.selectbox("Tipo de gráfico", ["Línea", "Área (apilada)", "Barras"], key="tipo_grafico")
-            st.slider("Rango de años", min_year, max_year,
-                      st.session_state.get("rango", (1980, max_year)), key="rango")
-        with col_f2:
-            st.checkbox("📈 Mostrar tendencia", value=st.session_state.mostrar_tendencia, key="mostrar_tendencia")
-            st.checkbox("📊 Media por décadas", value=st.session_state.mostrar_decadas, key="mostrar_decadas")
-            st.checkbox("🔮 Incluir modelo predictivo", value=st.session_state.mostrar_prediccion, key="mostrar_prediccion")
-            st.checkbox("🧮 Escala logarítmica", value=st.session_state.usar_escala_log, key="usar_escala_log")
+        # 🔧 Filtros debajo del resumen (sincronizados con el botón global)
+        if st.session_state.get("ui_show_filters", True):
+            st.markdown("### ⚙️ Ajustar visualización")
+            colf1, colf2 = st.columns(2)
+            with colf1:
+                st.multiselect("⚡ Fuentes energéticas", fuentes_disponibles, default=fuentes_sel, key="fuentes_sel")
+                st.selectbox("📊 Tipo de gráfico", ["Línea", "Área (apilada)", "Barras"], key="tipo_grafico")
+                st.slider("📆 Rango de años", min_year, max_year,
+                        st.session_state.get("rango", (1980, max_year)), key="rango")
+            with colf2:
+                st.checkbox("📈 Mostrar tendencia", value=mostrar_tendencia, key="mostrar_tendencia")
+                st.checkbox("📊 Media por décadas", value=mostrar_decadas, key="mostrar_decadas")
+                st.checkbox("🔮 Incluir modelo predictivo", value=mostrar_prediccion, key="mostrar_prediccion")
+                st.checkbox("🧮 Escala logarítmica", value=usar_escala_log, key="usar_escala_log")
 
 # ------------------------------------------
 # MEDIA POR DÉCADAS
