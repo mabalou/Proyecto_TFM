@@ -346,6 +346,8 @@ h4:hover {{
 </style>
 
 <div class="header-bar">
+  <input type="checkbox" id="menuChk" />
+  <label for="menuChk" class="menu-toggle">☰ Menú</label>
   <div class="menu-links">{menu_html}</div>
   <div class="tools-wrap">
     <a class="pill {'is-on' if current_theme=='light' else ''}" href="{theme_url}" target="_self">
