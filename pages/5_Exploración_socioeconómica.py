@@ -30,23 +30,22 @@ with st.expander("📘 ¿Qué muestra esta sección?", expanded=False):
 # ------------------------------------------
 # CARGA DE DATOS
 # ------------------------------------------
+from pymongo import MongoClient
+
 @st.cache_data
 def cargar_datos():
-    df = pd.read_csv("data/socioeconomico/co2_emissions_by_country.csv")
-    df.columns = df.columns.str.strip().str.lower()
+    uri = "mongodb+srv://marcosabal:parausarentfm123@tfmcc.qfbhjbv.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client["tfm_datos"]
+    collection = db["co2_emissions_global"]
 
-    year_col = next((c for c in df.columns if "year" in c), None)
-    country_col = next((c for c in df.columns if "country" in c), None)
-    emission_col = next((c for c in df.columns if "co2" in c or "emission" in c), None)
+    docs = list(collection.find({}, {"_id": 0}))
+    df = pd.DataFrame(docs)
 
-    df = df.rename(columns={
-        year_col: "Year",
-        country_col: "Country",
-        emission_col: "CO2_Emissions_Mt"
-    })
-    df = df[["Year", "Country", "CO2_Emissions_Mt"]].dropna()
-    df["Year"] = pd.to_numeric(df["Year"], errors="coerce")
-    df["CO2_Emissions_Mt"] = pd.to_numeric(df["CO2_Emissions_Mt"], errors="coerce")
+    df = df.dropna(subset=["Year", "Country", "CO2_Emissions_Mt"])
+    df["Year"] = df["Year"].astype(int)
+    df["CO2_Emissions_Mt"] = df["CO2_Emissions_Mt"].astype(float)
+
     return df
 
 df = cargar_datos()

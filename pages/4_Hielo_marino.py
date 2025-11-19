@@ -42,32 +42,50 @@ with st.expander("📘 ¿Qué muestra esta sección?", expanded=False):
     - Comparativa **Ártico vs Antártico** (suavizada).
     - Conclusiones automáticas y exportación de datos y gráficos.
     """)
+# ------------------------------------------
+# CARGA DE DATOS DESDE MONGODB (Ártico / Antártico)
+# ------------------------------------------
+from pymongo import MongoClient
 
-# ------------------------------------------
-# CARGA DE DATOS
-# ------------------------------------------
 @st.cache_data
 def cargar_datos(region: str) -> pd.DataFrame:
-    archivo = "data/hielo/arctic_sea_ice_extent.csv" if region == "Ártico" else "data/hielo/antarctic_sea_ice_extent.csv"
-    df = pd.read_csv(archivo)
-    df.columns = df.columns.str.strip()
-    # Se esperan columnas Year, Month, Extent (NSIDC/NOAA formatos habituales)
-    df = df.rename(columns={"Year": "Año", "Month": "Mes", "Extent": "Extensión"})
-    # Limpieza
+    uri = "mongodb+srv://marcosabal:parausarentfm123@tfmcc.qfbhjbv.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client["tfm_datos"]
+
+    # Nombre de la colección según región
+    nombre_col = "hielo_arctic_sea_ice_extent" if region == "Ártico" else "hielo_antarctic_sea_ice_extent"
+    collection = db[nombre_col]
+
+    # Obtener documentos
+    docs = list(collection.find({}, {"_id": 0}))
+    df = pd.DataFrame(docs)
+
+    # Normalización
+    df = df.rename(columns={
+        "Year": "Año",
+        "Extent": "Extensión"
+    })
+
     df["Año"] = pd.to_numeric(df["Año"], errors="coerce")
-    df["Mes"] = pd.to_numeric(df["Mes"], errors="coerce")
     df["Extensión"] = pd.to_numeric(df["Extensión"], errors="coerce")
-    df = df.dropna(subset=["Año", "Mes", "Extensión"])
-    # Agregado anual para evitar "escalones" y ruido mensual
+
+    df = df.dropna(subset=["Año", "Extensión"])
+
+    # Agregado anual (igual que antes)
     df_anual = df.groupby("Año", as_index=False)["Extensión"].mean()
+
     return df_anual
+
 
 @st.cache_data
 def cargar_datos_ambos() -> pd.DataFrame:
     artico = cargar_datos("Ártico").copy()
     artico["Región"] = "Ártico"
+
     antartico = cargar_datos("Antártico").copy()
     antartico["Región"] = "Antártico"
+
     return pd.concat([artico, antartico], ignore_index=True)
 
 # ------------------------------------------

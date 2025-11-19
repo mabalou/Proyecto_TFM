@@ -26,26 +26,36 @@ with st.expander("📘 ¿Qué muestra esta sección?", expanded=False):
     """)
 
 # ------------------------------------------
-# CARGA DE DATOS
+# CARGA DE DATOS DESDE MONGODB
 # ------------------------------------------
+from pymongo import MongoClient
+
 @st.cache_data
 def cargar_datos():
-    df = pd.read_csv("data/socioeconomico/gdp_by_country.csv")
-    df.columns = df.columns.str.strip().str.lower()
+    uri = "mongodb+srv://marcosabal:parausarentfm123@tfmcc.qfbhjbv.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client["tfm_datos"]
+    collection = db["socioeconomico_gdp_by_country"]
 
-    year_col = next((c for c in df.columns if "year" in c), None)
-    country_col = next((c for c in df.columns if "country" in c), None)
-    value_col = next((c for c in df.columns if "gdp" in c or "value" in c or "pib" in c), None)
+    docs = list(collection.find({}, {"_id": 0}))
+    df = pd.DataFrame(docs)
 
-    if not all([year_col, country_col, value_col]):
-        st.error(f"⚠️ No se encontraron columnas esperadas. Columnas detectadas: {list(df.columns)}")
-        st.stop()
+    # Normalizar nombres
+    df.columns = df.columns.str.strip()
 
-    df = df.rename(columns={year_col: "Año", country_col: "País", value_col: "PIB"})
-    df = df[["Año", "País", "PIB"]].dropna()
+    # Renombrar columnas
+    df = df.rename(columns={
+        "Country Name": "País",
+        "Year": "Año",
+        "Value": "PIB"
+    })
+
+    # Limpiar
     df["Año"] = pd.to_numeric(df["Año"], errors="coerce")
     df["PIB"] = pd.to_numeric(df["PIB"], errors="coerce")
-    return df.dropna()
+    df = df.dropna(subset=["Año", "País", "PIB"])
+
+    return df
 
 df = cargar_datos()
 paises = sorted(df["País"].unique())

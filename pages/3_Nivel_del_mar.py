@@ -49,19 +49,39 @@ with st.expander("📘 ¿Qué muestra esta sección?", expanded=False):
 # ------------------------------------------
 # CARGA DE DATOS
 # ------------------------------------------
+from pymongo import MongoClient
 @st.cache_data
 def cargar_datos():
-    df = pd.read_csv("data/sea_level/sea_level_nasa.csv", skiprows=1, header=None, names=["Fecha", "Nivel_mar"])
-    df["Fecha"] = pd.to_datetime(df["Fecha"], errors="coerce")
-    df = df.dropna(subset=["Fecha", "Nivel_mar"])
-    df = df[df["Nivel_mar"].between(-100, 100)]
-    df = df[df["Nivel_mar"] != -999]
-    df["Año"] = df["Fecha"].dt.year
-    df["Mes"] = df["Fecha"].dt.month
+    uri = "mongodb+srv://marcosabal:parausarentfm123@tfmcc.qfbhjbv.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client["tfm_datos"]
+    collection = db["sea_level_sea_level_nasa"]
+
+    docs = list(collection.find({}, {"_id": 0}))
+    df = pd.DataFrame(docs)
+
     return df
 
+
+# 🔹 (1) Cargar datos ANTES DE NADA
 df = cargar_datos()
+
+# 🔹 (2) Y AHORA calcular los años
 min_year, max_year = int(df["Año"].min()), int(df["Año"].max())
+
+
+# ------------------------------------------
+# ESTADO Y FILTROS (YA FUNCIONA)
+# ------------------------------------------
+defaults = {
+    "tipo_grafico": "Línea",
+    "rango": (1993, max_year),   # ✔️ Ahora sí existe max_year
+    "mostrar_tendencia": True,
+    "mostrar_decadas": True,
+    "mostrar_prediccion": True,
+}
+for k, v in defaults.items():
+    st.session_state.setdefault(k, v)
 
 # ------------------------------------------
 # ESTADO Y FILTROS

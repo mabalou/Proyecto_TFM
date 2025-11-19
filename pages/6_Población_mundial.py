@@ -27,19 +27,29 @@ with st.expander("📘 ¿Qué muestra esta sección?", expanded=False):
 # ------------------------------------------
 # CARGA DE DATOS
 # ------------------------------------------
+from pymongo import MongoClient
+
 @st.cache_data
 def cargar_datos():
-    df = pd.read_csv("data/socioeconomico/population_by_country.csv")
-    df.columns = df.columns.str.strip().str.lower()
+    uri = "mongodb+srv://marcosabal:parausarentfm123@tfmcc.qfbhjbv.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client["tfm_datos"]
+    coll = db["socioeconomico_population_by_country"]
+
+    docs = list(coll.find({}, {"_id":0}))
+    df = pd.DataFrame(docs)
+
     df = df.rename(columns={
-        "country name": "País",
-        "year": "Año",
-        "value": "Población"
+        "Country Name": "País",
+        "Year": "Año",
+        "Value": "Población"
     })
-    df = df[["Año", "País", "Población"]].dropna()
-    df["Año"] = pd.to_numeric(df["Año"], errors="coerce")
+
+    df = df.dropna(subset=["País", "Año", "Población"])
+    df["Año"] = df["Año"].astype(int)
     df["Población"] = pd.to_numeric(df["Población"], errors="coerce")
-    return df.dropna()
+
+    return df
 
 df = cargar_datos()
 paises = sorted(df["País"].unique().tolist())

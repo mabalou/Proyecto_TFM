@@ -6,6 +6,7 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 from sklearn.linear_model import LinearRegression
+from pymongo import MongoClient
 
 # -------------------------------
 # Configuración de página
@@ -47,11 +48,22 @@ with st.expander("📘 ¿Qué muestra esta sección?", expanded=False):
 # -------------------------------
 @st.cache_data
 def cargar_datos():
-    df = pd.read_csv("data/temperatura/global_temperature_nasa.csv", skiprows=1)
-    df = df[["Year", "J-D", "DJF", "MAM", "JJA", "SON"]]
+    uri = "mongodb+srv://marcosabal:parausarentfm123@tfmcc.qfbhjbv.mongodb.net/?retryWrites=true&w=majority"
+
+    client = MongoClient(uri)
+    db = client["tfm_datos"]
+    collection = db["temperatura_global_temperature_nasa"]
+
+    # Leer todos los documentos
+    docs = list(collection.find({}, {"_id": 0}))
+
+    df = pd.DataFrame(docs)
+
+    # Limpieza igual que antes
     df = df.replace("***", np.nan)
     for col in df.columns[1:]:
         df[col] = pd.to_numeric(df[col], errors="coerce")
+
     return df.dropna()
 
 df = cargar_datos()

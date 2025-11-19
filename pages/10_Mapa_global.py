@@ -82,99 +82,127 @@ def _normaliza(df: pd.DataFrame, country_key=("country name","country"), year_ke
     return out
 
 # -------------------------------
-# Carga de datos 
+# Carga de datos DESDE MONGODB
 # -------------------------------
 @st.cache_data
 def load_all_sources():
-    # CO2 por país (total y per cápita si existe)
-    co2c_raw = _safe_read_csv("data/socioeconomico/co2_emissions_by_country.csv")
-    co2c = pd.DataFrame(columns=["Country","Year","Value"])
-    co2c_pc = pd.DataFrame(columns=["Country","Year","Value"])
+    from pymongo import MongoClient
+
+    # --- Conexión ---
+    uri = "mongodb+srv://marcosabal:parausarentfm123@tfmcc.qfbhjbv.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client["tfm_datos"]
+
+    def _load_coll(name: str) -> pd.DataFrame:
+        docs = list(db[name].find({}, {"_id": 0}))
+        if not docs:
+            return pd.DataFrame()
+        df = pd.DataFrame(docs)
+        df.columns = df.columns.str.strip().str.lower()
+        return df
+
+    # ---------------------------------
+    # 1) CO₂ POR PAÍS (total y per cápita)
+    # ---------------------------------
+    co2c_raw = _load_coll("socioeconomico_co2_emissions_by_country")
+    co2c     = pd.DataFrame(columns=["Country", "Year", "Value"])
+    co2c_pc  = pd.DataFrame(columns=["Country", "Year", "Value"])
+
     if not co2c_raw.empty:
-        co2c_raw.columns = co2c_raw.columns.str.strip().str.lower()
-        # total
         if "co2" in co2c_raw.columns:
-            co2c = _normaliza(co2c_raw.rename(columns={"co2":"value"}))
+            co2c = _normaliza(co2c_raw.rename(columns={"co2": "value"}))
         elif "value" in co2c_raw.columns:
             co2c = _normaliza(co2c_raw)
-        # per cápita si existe
+
         for cand in ["co2_per_capita", "co2_per_capita_t", "co2_pc"]:
             if cand in co2c_raw.columns:
-                co2c_pc = _normaliza(co2c_raw.rename(columns={cand:"value"}))
+                co2c_pc = _normaliza(co2c_raw.rename(columns={cand: "value"}))
                 break
 
-    # PIB
-    gdp_raw = _safe_read_csv("data/socioeconomico/gdp_by_country.csv")
-    gdp = pd.DataFrame(columns=["Country","Year","Value"])
-    gdp_pc = pd.DataFrame(columns=["Country","Year","Value"])
+    # ---------------------------------
+    # 2) PIB
+    # ---------------------------------
+    gdp_raw = _load_coll("socioeconomico_gdp_by_country")
+    gdp     = pd.DataFrame(columns=["Country", "Year", "Value"])
+    gdp_pc  = pd.DataFrame(columns=["Country", "Year", "Value"])
+
     if not gdp_raw.empty:
-        gdp_raw.columns = gdp_raw.columns.str.strip().str.lower()
-        gdp = _normaliza(gdp_raw)  # suele venir 'value' como PIB total
-        for cand in ["gdp_per_capita_usd","gdp_per_capita"]:
+        gdp = _normaliza(gdp_raw)
+        for cand in ["gdp_per_capita_usd", "gdp_per_capita"]:
             if cand in gdp_raw.columns:
-                gdp_pc = _normaliza(gdp_raw.rename(columns={cand:"value"}))
+                gdp_pc = _normaliza(gdp_raw.rename(columns={cand: "value"}))
                 break
 
-    # Población
-    pop_raw = _safe_read_csv("data/socioeconomico/population_by_country.csv")
-    pop = pd.DataFrame(columns=["Country","Year","Value"])
+    # ---------------------------------
+    # 3) Población
+    # ---------------------------------
+    pop_raw = _load_coll("socioeconomico_population_by_country")
+    pop     = pd.DataFrame(columns=["Country", "Year", "Value"])
     if not pop_raw.empty:
-        pop_raw.columns = pop_raw.columns.str.strip().str.lower()
         pop = _normaliza(pop_raw)
 
-    # Gases globales (concentraciones)
-    def _load_gas(path, label):
-        df = _safe_read_csv(path, comment="#")
+    # ---------------------------------
+    # 4) Gases GLOBALALES
+    # ---------------------------------
+    def _load_gas(coll_name: str, label: str):
+        df = _load_coll(coll_name)
         if df.empty:
-            return pd.DataFrame(columns=["Year","Value"])
-        df.columns = df.columns.str.strip().str.lower()
-        if "year" not in df.columns:
-            return pd.DataFrame(columns=["Year","Value"])
+            return pd.DataFrame(columns=["Year", "Value", "Label"])
+
+        df.columns = df.columns.str.lower()
+
         val_col = None
         for cand in ["average", "trend", "value"]:
             if cand in df.columns:
                 val_col = cand
                 break
-        if val_col is None:
-            return pd.DataFrame(columns=["Year","Value"])
-        aux = df.rename(columns={"year":"Year", val_col:"Value"})[["Year","Value"]]
+        if val_col is None or "year" not in df.columns:
+            return pd.DataFrame(columns=["Year", "Value", "Label"])
+
+        aux = df.rename(columns={"year": "Year", val_col: "Value"})[["Year", "Value"]]
         aux["Year"] = pd.to_numeric(aux["Year"], errors="coerce")
         aux["Value"] = pd.to_numeric(aux["Value"], errors="coerce")
         aux = aux.dropna()
         aux["Label"] = label
         return aux
 
-    co2_g = _load_gas("data/gases/greenhouse_gas_co2_global.csv", "CO₂ (ppm)")
-    ch4_g = _load_gas("data/gases/greenhouse_gas_ch4_global.csv", "CH₄ (ppb)")
-    n2o_g = _load_gas("data/gases/greenhouse_gas_n2o_global.csv", "N₂O (ppb)")
-
-    # Construir catálogo de variables disponibles
-    variables = {}
-    if not co2c.empty:    variables["CO₂ (socioeconómico, Mt) por país"] = co2c
-    if not co2c_pc.empty: variables["CO₂ per cápita (t) por país"] = co2c_pc
-    if not gdp.empty:     variables["PIB (USD) por país"] = gdp
-    if not gdp_pc.empty:  variables["PIB per cápita (USD) por país"] = gdp_pc
-    if not pop.empty:     variables["Población por país"] = pop
+    co2_g = _load_gas("gases_greenhouse_gas_co2_global", "CO₂ (ppm)")
+    ch4_g = _load_gas("gases_greenhouse_gas_ch4_global", "CH₄ (ppb)")
+    n2o_g = _load_gas("gases_greenhouse_gas_n2o_global", "N₂O (ppb)")
 
     gases_globales = pd.concat([co2_g, ch4_g, n2o_g], ignore_index=True)
-    # Rango años global para los selectores
-    min_year = 1960
-    max_year = 2024
+
+    # ---------------------------------
+    # 5) Catálogo de variables por país
+    # ---------------------------------
+    variables = {}
+
+    if not co2c.empty:    variables["CO₂ (socioeconómico, Mt) por país"] = co2c
+    if not co2c_pc.empty: variables["CO₂ per cápita (t) por país"]        = co2c_pc
+    if not gdp.empty:     variables["PIB (USD) por país"]                = gdp
+    if not gdp_pc.empty:  variables["PIB per cápita (USD) por país"]     = gdp_pc
+    if not pop.empty:     variables["Población por país"]                = pop
+
+    # ---------------------------------
+    # 6) Rango de años
+    # ---------------------------------
     years = []
     if variables:
-        years += [int(v["Year"].min()) for v in variables.values() if not v.empty]
-        years += [int(v["Year"].max()) for v in variables.values() if not v.empty]
+        years += [int(v["Year"].min()) for v in variables.values()]
+        years += [int(v["Year"].max()) for v in variables.values()]
     if not gases_globales.empty:
         years += [int(gases_globales["Year"].min()), int(gases_globales["Year"].max())]
+
     if years:
         min_year, max_year = min(years), max(years)
+    else:
+        min_year, max_year = 1960, 2024
 
     return variables, gases_globales, (min_year, max_year)
-
+# -------------------------------
+# Cargar datos (Mongo)
+# -------------------------------
 variables, gases_globales, (min_year, max_year) = load_all_sources()
-if not variables and gases_globales.empty:
-    st.error("No se han podido cargar datos. Revisa las rutas y columnas de los CSV.")
-    st.stop()
 
 # -------------------------------
 # Estado inicial y Filtros (integrado con el header)
@@ -515,37 +543,80 @@ else:
         else:
             st.info("No hay datos válidos para el año seleccionado.")
 
+# -------------------------------
+# TOP-10 SOLO PARA VARIABLES POR PAÍS
+# -------------------------------
+if "— global" not in st.session_state.map_var:
 
-    # Top-10 del año
     st.subheader(f"🏆 Top 10 países — {st.session_state.year}")
+
+    # df_original = todos los países SIN filtro del multiselect
+    df_original = variables.get(var_name, pd.DataFrame()).copy()
+
+    # Si el usuario filtró países → top solo sobre esos países
+    if st.session_state.countries_sel:
+        base_df = df_original[df_original["Country"].isin(st.session_state.countries_sel)].copy()
+    else:
+        base_df = df_original
+
+    year_df = base_df[base_df["Year"] == st.session_state.year].dropna(subset=["Value"])
+
     top_df = (
-        dfv[dfv["Year"] == st.session_state.year]
-        .dropna(subset=["Value"])
-        .sort_values("Value", ascending=False)
+        year_df.sort_values("Value", ascending=False)
         .head(10)
-        .rename(columns={"Country":"País","Year":"Año","Value":var_name})
+        .rename(columns={"Country": "País", "Year": "Año", "Value": var_name})
     )
+
     if not top_df.empty:
-        # Formato agradable
-        top_show = top_df.copy()
-        top_show[var_name] = top_show[var_name].apply(lambda x: _fmt_value(var_name, x))
-        st.dataframe(top_show, use_container_width=True)
-        # Resumen
+
+        # --- Gráfico horizontal (sin espacio negro)
+        import plotly.express as px
+        fig_top = px.bar(
+            top_df,
+            x=var_name,
+            y="País",
+            orientation="h",
+            title=None,
+            text=var_name,
+        )
+        fig_top.update_layout(
+            height=500,
+            margin=dict(l=10, r=10, t=10, b=10),
+            template="plotly_dark"
+        )
+        fig_top.update_traces(texttemplate="%{text:,.0f}", textposition="outside")
+
+        st.plotly_chart(fig_top, use_container_width=True)
+
+        # Resumen debajo del gráfico sin huecos
         pais_top = top_df.iloc[0]["País"]
         valor_top = top_df.iloc[0][var_name]
-        st.success(f"📊 En **{st.session_state.year}**, el valor más alto de **{var_name}** lo tiene **{pais_top}** con **{_fmt_value(var_name, valor_top)}**.")
+        st.success(
+            f"📊 En **{st.session_state.year}**, el valor más alto de **{var_name}** "
+            f"lo tiene **{pais_top}** con **{_fmt_value(var_name, valor_top)}**."
+        )
+
     else:
-        st.info("No hay datos para este año tras aplicar los filtros.")
+        st.info("No hay datos suficientes para generar el Top-10 este año.")
 
     # Tendencia temporal del Top-5 del año
     st.subheader("📈 Tendencia temporal del Top-5")
+
     top5 = top_df["País"].head(5).tolist() if not top_df.empty else []
-    trend = dfv[dfv["Country"].isin(top5)].copy()
+
+    # Para la serie temporal usamos SIEMPRE todos los años disponibles
+    # de esos países (df_original, sin filtrar por selection del año)
+    trend = df_original[df_original["Country"].isin(top5)].copy()
+
     if not trend.empty and len(top5) > 0:
         fig_line = px.line(
-            trend, x="Year", y="Value", color="Country",
-            labels={"Year":"Año", "Value":var_name, "Country":"País"},
-            title=None, markers=True
+            trend,
+            x="Year",
+            y="Value",
+            color="Country",
+            labels={"Year": "Año", "Value": var_name, "Country": "País"},
+            title=None,
+            markers=True,
         )
         if use_log:
             fig_line.update_yaxes(type="log")
@@ -558,9 +629,9 @@ else:
     concl = []
     if not top_df.empty:
         concl.append(f"• **{top_df.iloc[0]['País']}** lidera **{var_name}** en {st.session_state.year}.")
-    # pendiente media global sobre el rango disponible
     try:
-        gseries = dfv.groupby("Year")["Value"].mean().dropna()
+        # Tendencia media global (sobre el df ORIGINAL, no filtrado)
+        gseries = df_original.groupby("Year")["Value"].mean().dropna()
         if len(gseries) > 2:
             x = gseries.index.values
             y = gseries.values
@@ -569,6 +640,7 @@ else:
             concl.append(f"• Tendencia promedio global **{tend}** en el periodo ({coef:,.3g} por año).")
     except Exception:
         pass
+
     if concl:
         st.success("\n\n".join(concl))
     else:
@@ -584,17 +656,26 @@ else:
                 export_df = dfv.copy()
             else:
                 export_df = dfv[dfv["Year"] == st.session_state.year].copy()
-            csv = export_df.rename(columns={"Country":"País","Year":"Año","Value":var_name}).to_csv(index=False).encode("utf-8")
-            st.download_button("📄 Descargar datos (CSV)", data=csv, file_name="mapa_global_filtrado.csv", mime="text/csv")
+            csv = (
+                export_df
+                .rename(columns={"Country": "País", "Year": "Año", "Value": var_name})
+                .to_csv(index=False)
+                .encode("utf-8")
+            )
+            st.download_button(
+                "📄 Descargar datos (CSV)",
+                data=csv,
+                file_name="mapa_global_filtrado.csv",
+                mime="text/csv",
+            )
         except Exception as e:
             st.error(f"No se pudo generar el CSV: {e}")
     with c2:
         import plotly.io as pio
-        # Exportar el mapa en formato HTML interactivo (compatible con Streamlit Cloud)
         html_bytes = pio.to_html(fig_map, full_html=False).encode("utf-8")
         st.download_button(
             "🖼️ Descargar mapa (HTML interactivo)",
             data=html_bytes,
             file_name="mapa_global.html",
-            mime="text/html"
+            mime="text/html",
         )

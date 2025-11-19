@@ -48,28 +48,41 @@ with st.expander("📘 ¿Qué muestra esta sección?", expanded=False):
     """)
 
 # -------------------------------
-# CARGA DE DATOS
+# CARGA DE DATOS DESDE MONGO
 # -------------------------------
+from pymongo import MongoClient
+
 @st.cache_data
-def cargar_datos_gas(ruta_csv):
-    with open(ruta_csv, "r", encoding="utf-8") as f:
-        lineas = f.readlines()
-    encabezado_index = next((i for i, l in enumerate(lineas) if "year" in l.lower() and "average" in l.lower()), 0)
-    df = pd.read_csv(ruta_csv, skiprows=encabezado_index)
+def cargar_datos_gas(nombre_coleccion):
+    uri = "mongodb+srv://marcosabal:parausarentfm123@tfmcc.qfbhjbv.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client["tfm_datos"]
+    collection = db[nombre_coleccion]
+
+    # Cargar documentos sin el _id
+    docs = list(collection.find({}, {"_id": 0}))
+    df = pd.DataFrame(docs)
+
+    # === LIMPIEZA EXACTA A LA DEL CÓDIGO ORIGINAL ===
     df.columns = df.columns.str.strip().str.lower()
     df = df.rename(columns={
-        "year": "Año",
+        "año": "Año",
         "average": "Concentración",
-        "trend": "Tendencia"
+        "concentración": "Concentración",
+        "trend": "Tendencia",
+        "tendencia": "Tendencia"
     })
+
     df = df.dropna(subset=["Año", "Concentración"])
     df["Año"] = df["Año"].astype(int)
+
     return df
 
+# Diccionario equivalente al anterior
 RUTAS = {
-    "CO₂ (ppm)": "data/gases/greenhouse_gas_co2_global.csv",
-    "CH₄ (ppb)": "data/gases/greenhouse_gas_ch4_global.csv",
-    "N₂O (ppb)": "data/gases/greenhouse_gas_n2o_global.csv"
+    "CO₂ (ppm)": "gases_co2_global",
+    "CH₄ (ppb)": "gases_ch4_global",
+    "N₂O (ppb)": "gases_n2o_global"
 }
 
 # -------------------------------

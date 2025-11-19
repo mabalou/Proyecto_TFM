@@ -57,20 +57,53 @@ def nombre_bonito(col):
     return NOMBRES_BONITOS.get(col.lower(), col.replace("_", " ").capitalize() + " (TWh)")
 
 # ------------------------------------------
-# CARGA DE DATOS
+# CARGA DE DATOS DESDE MONGODB
 # ------------------------------------------
+from pymongo import MongoClient
+
 @st.cache_data
 def cargar_datos():
-    df = _safe_read_csv("data/energia/energy_consuption_by_source.csv")
-    df.columns = df.columns.str.strip().str.lower()
-    df = df.groupby("year").sum(numeric_only=True).reset_index()
-    df_long = df.melt(id_vars="year", var_name="Fuente_raw", value_name="Consumo")
-    df_long = df_long[df_long["Fuente_raw"].apply(es_columna_energetica)]
-    df_long["Año"] = df_long["year"].astype(int)
-    df_long["Fuente"] = df_long["Fuente_raw"].apply(nombre_bonito)
-    df_long = df_long.dropna(subset=["Consumo"])
-    return df_long, sorted(df_long["Fuente"].unique()), (int(df_long["Año"].min()), int(df_long["Año"].max()))
+    uri = "mongodb+srv://marcosabal:parausarentfm123@tfmcc.qfbhjbv.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client["tfm_datos"]
+    collection = db["energia_energy_consuption_by_source"]
 
+    # Leemos todos los documentos (sin _id)
+    docs = list(collection.find({}, {"_id": 0}))
+    df = pd.DataFrame(docs)
+
+    # Normalizamos nombres de columnas a minúsculas
+    df.columns = df.columns.str.strip().str.lower()
+
+    # Aseguramos que year es numérico
+    df["year"] = pd.to_numeric(df["year"], errors="coerce")
+    df = df.dropna(subset=["year"])
+
+    # Agregamos por año (como antes con el CSV)
+    df = df.groupby("year", as_index=False).sum(numeric_only=True)
+
+    # Pasamos a formato largo
+    df_long = df.melt(id_vars="year", var_name="fuente_raw", value_name="Consumo")
+
+    # Nos quedamos solo con columnas energéticas
+    df_long = df_long[df_long["fuente_raw"].apply(es_columna_energetica)]
+
+    # Campos derivados
+    df_long["Año"] = df_long["year"].astype(int)
+    df_long["Fuente"] = df_long["fuente_raw"].apply(nombre_bonito)
+
+    # Nos aseguramos de que Consumo es numérico y sin NaN
+    df_long["Consumo"] = pd.to_numeric(df_long["Consumo"], errors="coerce")
+    df_long = df_long.dropna(subset=["Consumo"])
+
+    # Devolvemos exactamente lo que espera el resto del script
+    min_year = int(df_long["Año"].min())
+    max_year = int(df_long["Año"].max())
+    fuentes = sorted(df_long["Fuente"].unique())
+
+    return df_long, fuentes, (min_year, max_year)
+
+# llamada
 df_long, fuentes_disponibles, (min_year, max_year) = cargar_datos()
 
 # ------------------------------------------

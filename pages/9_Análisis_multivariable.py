@@ -76,63 +76,73 @@ def _style_axes(fig, font_size=15, axis_title=17):
 TEAL = "#0d6b6b"
 
 # -------------------------------------------------
-# CARGA GLOBAL (clima + energía agregada mundial)
+# CARGA GLOBAL (clima + energía agregada mundial) DESDE MONGODB
 # -------------------------------------------------
+from pymongo import MongoClient
+
 @st.cache_data
 def load_global_sources():
+
+    uri = "mongodb+srv://marcosabal:parausarentfm123@tfmcc.qfbhjbv.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client["tfm_datos"]
+
     dfs = []
-    t = _safe_read_csv("data/temperatura/global_temperature_nasa.csv")
+
+    # ---------------- TEMPERATURA ----------------
+    col_temp = db["temperatura_global_nasa"]
+    t = pd.DataFrame(list(col_temp.find({}, {"_id": 0})))
+
     if not t.empty:
         t.columns = t.columns.str.strip()
-        if "Year" in t.columns and any(c in t.columns for c in ["Jan", "Feb", "Mar"]):
+        if "Year" in t.columns:
             num_cols = [c for c in t.columns if c not in ["Year"]]
             t["Temp_anom_C"] = pd.to_numeric(t[num_cols], errors="coerce").mean(axis=1)
             t = t.rename(columns={"Year": "Año"})[["Año", "Temp_anom_C"]].dropna()
-        elif "year" in t.columns:
-            t = t.rename(columns={"year": "Año"})
-            num_cols = [c for c in t.columns if c != "Año"]
-            t["Temp_anom_C"] = pd.to_numeric(t[num_cols], errors="coerce").mean(axis=1)
-            t = t[["Año", "Temp_anom_C"]].dropna()
+            t["Temp_anom_C"] = t["Temp_anom_C"].rolling(5, center=True, min_periods=1).mean()
         else:
             t = pd.DataFrame(columns=["Año", "Temp_anom_C"])
-        t["Temp_anom_C"] = t["Temp_anom_C"].rolling(5, center=True, min_periods=1).mean()
-    else:
-        t = pd.DataFrame(columns=["Año", "Temp_anom_C"])
     dfs.append(t)
 
-    def _load_gas(path, out_col):
-        df = _safe_read_csv(path, comment="#")
-        if df.empty:
+    # ---------------- GASES ----------------
+    def _load_gas_mongo(collection, out_col):
+        df = pd.DataFrame(list(db[collection].find({}, {"_id": 0})))
+        if df.empty or "year" not in df.columns:
             return pd.DataFrame(columns=["Año", out_col])
-        df.columns = df.columns.str.strip().str.lower()
-        if "year" not in df.columns:
+        df = df.rename(columns={"year": "Año"})
+        if "average" in df.columns:
+            df = df.rename(columns={"average": out_col})
+        elif "trend" in df.columns:
+            df = df.rename(columns={"trend": out_col})
+        else:
             return pd.DataFrame(columns=["Año", out_col])
-        val_col = "average" if "average" in df.columns else ("trend" if "trend" in df.columns else None)
-        if val_col is None:
-            return pd.DataFrame(columns=["Año", out_col])
-        df = df.rename(columns={"year": "Año", val_col: out_col})
         df[out_col] = pd.to_numeric(df[out_col], errors="coerce")
         return df[["Año", out_col]].dropna()
 
-    co2 = _load_gas("data/gases/greenhouse_gas_co2_global.csv", "CO2_ppm")
-    ch4 = _load_gas("data/gases/greenhouse_gas_ch4_global.csv", "CH4_ppb")
-    n2o = _load_gas("data/gases/greenhouse_gas_n2o_global.csv", "N2O_ppb")
+    co2 = _load_gas_mongo("gases_co2_global", "CO2_ppm")
+    ch4 = _load_gas_mongo("gases_ch4_global", "CH4_ppb")
+    n2o = _load_gas_mongo("gases_n2o_global", "N2O_ppb")
+
     dfs += [co2, ch4, n2o]
 
-    sl = _safe_read_csv("data/sea_level/sea_level_nasa.csv", skiprows=1, header=None, names=["Fecha", "Nivel_mm"])
-    if not sl.empty:
+    # ---------------- NIVEL DEL MAR ----------------
+    sl = pd.DataFrame(list(db["sea_level_nasa"].find({}, {"_id": 0})))
+    if not sl.empty and "Fecha" in sl.columns:
         sl["Fecha"] = pd.to_datetime(sl["Fecha"], errors="coerce")
         sl["Año"] = sl["Fecha"].dt.year
         sl = sl.groupby("Año", as_index=False)["Nivel_mm"].mean()
         sl = sl.rename(columns={"Nivel_mm": "SeaLevel_mm"})
     dfs.append(sl)
 
-    ene = _safe_read_csv("data/energia/energy_consuption_by_source.csv")
+    # ---------------- ENERGÍA GLOBAL ----------------
+    ene = pd.DataFrame(list(db["energia_energy_consuption_by_source"].find({}, {"_id": 0})))
+
     if not ene.empty:
         ene.columns = ene.columns.str.strip().str.lower()
         if "year" in ene.columns:
             ene = ene.rename(columns={"year": "Año"})
         ene = ene.groupby("Año", as_index=False).sum(numeric_only=True)
+
         nice = {
             "coal_consumption": "Coal_TWh",
             "oil_consumption": "Oil_TWh",
@@ -142,53 +152,71 @@ def load_global_sources():
         }
         ene = ene.rename(columns=nice)
         ene = ene[["Año"] + [v for v in nice.values() if v in ene.columns]]
+
     dfs.append(ene)
 
+    # ---------------- UNIFICAR ----------------
     df = None
     for d in dfs:
         if not d.empty and "Año" in d.columns:
             df = d if df is None else pd.merge(df, d, on="Año", how="outer")
-    if df is None or df.empty:
-        df = pd.DataFrame(columns=["Año"])
+
+    if df is None:
+        return pd.DataFrame(columns=["Año"])
+
     return df.sort_values("Año").reset_index(drop=True)
 
 # -------------------------------------------------
-# CARGA POR PAÍS
+# CARGA POR PAÍS — DESDE MONGODB
 # -------------------------------------------------
 @st.cache_data
 def load_country_sources():
-    gdp = _safe_read_csv("data/socioeconomico/gdp_by_country.csv")
-    gdp.columns = gdp.columns.str.strip().str.lower()
-    rename_gdp = {}
-    if "country name" in gdp.columns or "country" in gdp.columns:
-        rename_gdp["country name" if "country name" in gdp.columns else "country"] = "País"
-    if "year" in gdp.columns: rename_gdp["year"] = "Año"
-    if "value" in gdp.columns: rename_gdp["value"] = "PIB_USD"
-    gdp = gdp.rename(columns=rename_gdp)
-    gdp = gdp[[c for c in ["Año", "País", "PIB_USD"] if c in gdp.columns]].dropna()
 
-    pop = _safe_read_csv("data/socioeconomico/population_by_country.csv")
-    pop.columns = pop.columns.str.strip().str.lower()
-    rename_pop = {}
-    if "country name" in pop.columns or "country" in pop.columns:
-        rename_pop["country name" if "country name" in pop.columns else "country"] = "País"
-    if "year" in pop.columns: rename_pop["year"] = "Año"
-    if "value" in pop.columns: rename_pop["value"] = "Población"
-    pop = pop.rename(columns=rename_pop)
-    pop = pop[[c for c in ["Año", "País", "Población"] if c in pop.columns]].dropna()
+    uri = "mongodb+srv://marcosabal:parausarentfm123@tfmcc.qfbhjbv.mongodb.net/?retryWrites=true&w=majority"
+    client = MongoClient(uri)
+    db = client["tfm_datos"]
 
-    co2c = _safe_read_csv("data/socioeconomico/co2_emissions_by_country.csv")
-    co2c.columns = co2c.columns.str.strip().str.lower()
-    rename_c = {}
-    if "country name" in co2c.columns or "country" in co2c.columns:
-        rename_c["country name" if "country name" in co2c.columns else "country"] = "País"
-    if "year" in co2c.columns: rename_c["year"] = "Año"
-    if "value" in co2c.columns: rename_c["value"] = "CO2_Mt"
-    if "co2" in co2c.columns: rename_c["co2"] = "CO2_Mt"
-    co2c = co2c.rename(columns=rename_c)
-    co2c = co2c[[c for c in ["Año", "País", "CO2_Mt"] if c in co2c.columns]].dropna()
+    # -------- PIB --------
+    gdp = pd.DataFrame(list(db["socioeconomico_gdp_by_country"].find({}, {"_id": 0})))
+    if not gdp.empty:
+        gdp = gdp.rename(columns={
+            "Country Name": "País",
+            "country": "País",
+            "Year": "Año",
+            "Value": "PIB_USD"
+        })
+        gdp = gdp[["Año", "País", "PIB_USD"]].dropna()
+    else:
+        gdp = pd.DataFrame(columns=["Año", "País", "PIB_USD"])
 
-    return gdp, pop, co2c
+    # -------- POBLACIÓN --------
+    pop = pd.DataFrame(list(db["socioeconomico_population_by_country"].find({}, {"_id": 0})))
+    if not pop.empty:
+        pop = pop.rename(columns={
+            "Country Name": "País",
+            "country": "País",
+            "Year": "Año",
+            "Value": "Población"
+        })
+        pop = pop[["Año", "País", "Población"]].dropna()
+    else:
+        pop = pd.DataFrame(columns=["Año", "País", "Población"])
+
+    # -------- CO₂ --------
+    co2 = pd.DataFrame(list(db["socioeconomico_co2_by_country"].find({}, {"_id": 0})))
+    if not co2.empty:
+        co2 = co2.rename(columns={
+            "Country Name": "País",
+            "country": "País",
+            "Year": "Año",
+            "Value": "CO2_Mt",
+            "co2": "CO2_Mt"
+        })
+        co2 = co2[["Año", "País", "CO2_Mt"]].dropna()
+    else:
+        co2 = pd.DataFrame(columns=["Año", "País", "CO2_Mt"])
+
+    return gdp, pop, co2
 
 # -------------------------------------------------
 # ESTADO DE FILTROS
