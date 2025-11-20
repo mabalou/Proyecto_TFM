@@ -118,6 +118,21 @@ def load_all_sources():
             if cand in co2c_raw.columns:
                 co2c_pc = _normaliza(co2c_raw.rename(columns={cand: "value"}))
                 break
+    # ---------------------------------
+    # CH4 por país
+    # ---------------------------------
+    ch4_raw = _load_coll("gases_ch4_by_country")
+    ch4 = pd.DataFrame(columns=["Country", "Year", "Value"])
+    if not ch4_raw.empty:
+        ch4 = _normaliza(ch4_raw)
+
+    # ---------------------------------
+    # N2O por país
+    # ---------------------------------
+    n2o_raw = _load_coll("gases_n2o_by_country")
+    n2o = pd.DataFrame(columns=["Country", "Year", "Value"])
+    if not n2o_raw.empty:
+        n2o = _normaliza(n2o_raw)
 
     # ---------------------------------
     # 2) PIB
@@ -173,6 +188,18 @@ def load_all_sources():
     gases_globales = pd.concat([co2_g, ch4_g, n2o_g], ignore_index=True)
 
     # ---------------------------------
+    # 4b) Gases POR PAÍS
+    # ---------------------------------
+    co2p_raw = _load_coll("gases_co2_by_country")
+    ch4p_raw = _load_coll("gases_ch4_by_country")
+    n2op_raw = _load_coll("gases_n2o_by_country")
+
+    co2p = _normaliza(co2p_raw, value_key="value") if not co2p_raw.empty else pd.DataFrame(columns=["Country","Year","Value"])
+    ch4p = _normaliza(ch4p_raw, value_key="value") if not ch4p_raw.empty else pd.DataFrame(columns=["Country","Year","Value"])
+    n2op = _normaliza(n2op_raw, value_key="value") if not n2op_raw.empty else pd.DataFrame(columns=["Country","Year","Value"])
+
+
+    # ---------------------------------
     # 5) Catálogo de variables por país
     # ---------------------------------
     variables = {}
@@ -182,6 +209,10 @@ def load_all_sources():
     if not gdp.empty:     variables["PIB (USD) por país"]                = gdp
     if not gdp_pc.empty:  variables["PIB per cápita (USD) por país"]     = gdp_pc
     if not pop.empty:     variables["Población por país"]                = pop
+    if not ch4.empty: variables["Metano CH₄ (kt) por país"] = ch4
+    if not n2o.empty: variables["Óxido nitroso N₂O (kt) por país"] = n2o
+    if not co2p.empty: variables["CO₂ (kt) por país"] = co2p
+
 
     # ---------------------------------
     # 6) Rango de años
@@ -394,6 +425,74 @@ if isinstance(st.session_state.map_var, str) and "— global" in st.session_stat
         """)
 
     # ==============================================================
+# 🔥 A + B → Top-10 real por país (solo cuando la variable es GLOBAL)
+# ==============================================================
+
+if "— global" in st.session_state.map_var:
+
+    st.markdown("---")
+    st.subheader(f"🏆 Top-10 países por emisiones reales de {label} en {selected_year}")
+
+    # Seleccionar dataset correcto según el gas GLOBAL
+    if "CO₂" in label or "CO2" in label:
+        df_country = variables.get("CO₂ (kt) por país", pd.DataFrame())
+        unidad_country = "kt"
+
+    elif "CH₄" in label or "CH4" in label:
+        df_country = variables.get("Metano CH₄ (kt) por país", pd.DataFrame())
+        unidad_country = "kt"
+
+    elif "N₂O" in label or "N2O" in label:
+        df_country = variables.get("Óxido nitroso N₂O (kt) por país", pd.DataFrame())
+        unidad_country = "kt"
+
+
+    # 🚨 Verificar que el dataset por país existe y tiene columnas obligatorias
+    if df_country.empty or not all(c in df_country.columns for c in ["Country", "Year", "Value"]):
+        st.info("⚠️ No existen datos por país para este gas. Solo hay valores globales.")
+    else:
+        # Filtrar año
+        year_df = df_country[df_country["Year"] == selected_year].dropna(subset=["Value"])
+
+        if not year_df.empty:
+
+            # --- Top-10 ---
+            top10 = (
+                year_df.sort_values("Value", ascending=False)
+                .head(10)
+                .rename(columns={"Country": "País", "Value": f"Emisiones ({unidad_country})"})
+            )
+
+            # --- Gráfico horizontal ---
+            fig_top = px.bar(
+                top10,
+                x=f"Emisiones ({unidad_country})",
+                y="País",
+                orientation="h",
+                title=None
+            )
+
+            fig_top.update_layout(
+                height=450,
+                template="plotly_dark",
+                yaxis=dict(categoryorder="total ascending")
+            )
+
+            st.plotly_chart(fig_top, use_container_width=True)
+
+            # --- Resumen ---
+            pais_max = top10.iloc[0]["País"]
+            val_max = top10.iloc[0][f"Emisiones ({unidad_country})"]
+
+            st.success(
+                f"🌎 En **{selected_year}**, el país con más emisiones de **{label}** "
+                f"fue **{pais_max}** con **{val_max:,.2f} {unidad_country}**."
+            )
+
+        else:
+            st.info("No hay datos por país para este año.")
+
+    # ==============================================================
     # 📈 Serie temporal global (normalizada y suavizada)
     # ==============================================================
     st.subheader("📈 Serie temporal global (normalizada y suavizada)")
@@ -460,6 +559,7 @@ if isinstance(st.session_state.map_var, str) and "— global" in st.session_stat
     )
     st.plotly_chart(fig_line, use_container_width=True)
 
+    
     # ==============================================================
     # 💾 Exportaciones
     # ==============================================================
@@ -562,33 +662,33 @@ if "— global" not in st.session_state.map_var:
     year_df = base_df[base_df["Year"] == st.session_state.year].dropna(subset=["Value"])
 
     top_df = (
-        year_df.sort_values("Value", ascending=False)
+        year_df.sort_values("Value", ascending=False)  # mayor → menor
         .head(10)
         .rename(columns={"Country": "País", "Year": "Año", "Value": var_name})
     )
 
     if not top_df.empty:
 
-        # --- Gráfico horizontal (sin espacio negro)
+        # --- Gráfico horizontal SIN TEXTOS dentro de las barras ---
         import plotly.express as px
         fig_top = px.bar(
             top_df,
             x=var_name,
             y="País",
             orientation="h",
-            title=None,
-            text=var_name,
+            title=None
         )
+
         fig_top.update_layout(
             height=500,
             margin=dict(l=10, r=10, t=10, b=10),
-            template="plotly_dark"
+            template="plotly_dark",
+            yaxis=dict(categoryorder="total ascending")   # ← ESTA LÍNEA
         )
-        fig_top.update_traces(texttemplate="%{text:,.0f}", textposition="outside")
 
         st.plotly_chart(fig_top, use_container_width=True)
 
-        # Resumen debajo del gráfico sin huecos
+        # Resumen debajo del gráfico
         pais_top = top_df.iloc[0]["País"]
         valor_top = top_df.iloc[0][var_name]
         st.success(

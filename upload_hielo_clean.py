@@ -1,37 +1,60 @@
 import pandas as pd
 from pymongo import MongoClient
 
-# ------------------------------
-# 1) Cargar CSV limpio
-# ------------------------------
-df = pd.read_csv("data/socioeconomico/co2_emissions_by_country.csv")
-df.columns = df.columns.str.strip().str.lower()
+# -----------------------
+# Función de normalización GENÉRICA
+# -----------------------
+def normaliza(df, country_col, year_col, value_col):
+    df = df.rename(columns={
+        country_col: "Country",
+        year_col: "Year",
+        value_col: "Value"
+    })[["Country", "Year", "Value"]]
 
-# Detectar columnas correctas
-year_col = next((c for c in df.columns if "year" in c), None)
-country_col = next((c for c in df.columns if "country" in c), None)
-emission_col = next((c for c in df.columns if "co2" in c or "emission" in c), None)
+    df["Year"] = pd.to_numeric(df["Year"], errors="coerce")
+    df["Value"] = pd.to_numeric(df["Value"], errors="coerce")
+    df = df.dropna(subset=["Country", "Year", "Value"])
+    return df
 
-df = df.rename(columns={
-    year_col: "Year",
-    country_col: "Country",
-    emission_col: "CO2_Emissions_Mt"
-})
 
-df = df[["Year", "Country", "CO2_Emissions_Mt"]].dropna()
-
-df["Year"] = pd.to_numeric(df["Year"], errors="coerce")
-df["CO2_Emissions_Mt"] = pd.to_numeric(df["CO2_Emissions_Mt"], errors="coerce")
-
-# ------------------------------
-# 2) Conexión a MongoDB
-# ------------------------------
+# -----------------------
+# Conexión MongoDB
+# -----------------------
 uri = "mongodb+srv://marcosabal:parausarentfm123@tfmcc.qfbhjbv.mongodb.net/?retryWrites=true&w=majority"
 client = MongoClient(uri)
 db = client["tfm_datos"]
-collection = db["co2_emissions_global"]
 
-collection.drop()  # borrar si existe
-collection.insert_many(df.to_dict(orient="records"))
+def subir(df, nombre):
+    registros = df.to_dict(orient="records")
+    db[nombre].delete_many({})
+    db[nombre].insert_many(registros)
+    print(f"✔ Subido correctamente: {nombre} ({len(registros)} documentos)")
 
-print("✔ Datos subidos correctamente a MongoDB.")
+
+# -----------------------
+# 2) CH₄ (Metano)
+# -----------------------
+df_ch4 = pd.read_csv("data/gases/methane-emissions.csv")
+df_ch4.columns = df_ch4.columns.str.lower()
+
+# buscar automáticamente la columna de metano
+col_methane = "methane"
+if col_methane not in df_ch4.columns:
+    col_methane = [c for c in df_ch4.columns if "methane" in c][0]
+
+df_ch4_clean = normaliza(df_ch4, "entity", "year", col_methane)
+subir(df_ch4_clean, "gases_ch4_by_country")
+
+
+# -----------------------
+# 3) N₂O (Óxido nitroso)
+# -----------------------
+df_n2o = pd.read_csv("data/gases/nitrous-oxide-emissions.csv")
+df_n2o.columns = df_n2o.columns.str.lower()
+
+col_n2o = "nitrous oxide"
+if col_n2o not in df_n2o.columns:
+    col_n2o = [c for c in df_n2o.columns if "nitrous" in c][0]
+
+df_n2o_clean = normaliza(df_n2o, "entity", "year", col_n2o)
+subir(df_n2o_clean, "gases_n2o_by_country")
