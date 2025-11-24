@@ -313,8 +313,51 @@ if st.session_state.get("ui_show_filters", False):
             # Limpia selección de países al cambiar a vista global (sin romper estado)
             st.session_state.countries_sel = []
 
-        # Slider de año (siempre visible)
-        year = st.slider("Año", min_value=min_year, max_value=max_year, value=max_year, key="year")
+        # --- Ajustar rango de años según la variable actual ---
+        if "— global" in st.session_state.map_var:
+            # Cargar los datos globales AQUÍ para que df exista
+            label_tmp = st.session_state.map_var.replace("— global", "").replace("- global", "").strip()
+
+            if "CO₂" in label_tmp or "CO2" in label_tmp:
+                path_tmp = "data/gases/greenhouse_gas_co2_global.csv"
+            elif "CH₄" in label_tmp or "CH4" in label_tmp:
+                path_tmp = "data/gases/greenhouse_gas_ch4_global.csv"
+            else:
+                path_tmp = "data/gases/greenhouse_gas_n2o_global.csv"
+
+            df_tmp = _safe_read_csv(path_tmp)
+            df_tmp.columns = df_tmp.columns.str.strip().str.lower()
+
+            # identifica la columna de valor
+            val_col = next((c for c in ["average", "trend", "value", "global"] if c in df_tmp.columns), None)
+
+            if val_col:
+                df_tmp = df_tmp.rename(columns={"year": "Year", val_col: "Value"})
+                df_tmp["Year"] = pd.to_numeric(df_tmp["Year"], errors="coerce")
+                df_tmp = df_tmp.dropna()
+
+                slider_min = int(df_tmp["Year"].min())
+                slider_max = int(df_tmp["Year"].max())
+            else:
+                slider_min, slider_max = min_year, max_year
+
+        else:
+            # Caso: variable por país
+            dfv = variables.get(st.session_state.map_var, pd.DataFrame())
+            if dfv.empty:
+                slider_min, slider_max = min_year, max_year
+            else:
+                slider_min = int(dfv["Year"].min())
+                slider_max = int(dfv["Year"].max())
+
+        # Slider usando el rango adecuado
+        year = st.slider(
+            "Año",
+            min_value=slider_min,
+            max_value=slider_max,
+            value=min(slider_max, st.session_state.year),
+            key="year",
+        )
 
 else:
     # Garantiza consistencia interna aunque no se muestren filtros

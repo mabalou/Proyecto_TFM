@@ -368,17 +368,13 @@ if selected_module != "00_Inicio":
     st.stop()
 
 # ----------------------------------------
-# Contenido principal (tu hero original)
+# Contenido principal 
 # ----------------------------------------
 st.markdown("""
 <div style='text-align:center;margin-top:1.2rem;'>
-  <h1 style='font-size:2.3rem;font-weight:800;margin-bottom:0.6rem;'>🌍 Visualizador climático global del TFM</h1>
-  <p style='font-size:1.15rem;line-height:1.6em;max-width:900px;margin:auto;'>
-  Este proyecto forma parte del <b>Trabajo de Fin de Máster</b> del programa
-  <b>Máster en Big Data & Visual Analytics</b> (UNIR).<br><br>
-  Explora cómo el <b>cambio climático global</b> se relaciona con variables
-  socioeconómicas, energéticas y ambientales a lo largo del tiempo.
-  </p>
+  <h1 style='font-size:2.3rem;font-weight:800;margin-bottom:0.6rem;'>
+    🌍 Visualizador climático global del TFM
+  </h1>
 </div>
 """, unsafe_allow_html=True)
 
